@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的短链接 - URL缩短器</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f8f9fa; padding: 20px; }
+        .dashboard-card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>👤 {{ username }} 的短链接</h1>
+            <div>
+                <a href="/" class="btn btn-outline-primary">首页</a>
+                <a href="/logout" class="btn btn-outline-danger">登出</a>
+            </div>
+        </div>
+
+        <div class="dashboard-card">
+            <h4>我的短链接列表</h4>
+            {% if urls %}
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>短码</th>
+                            <th>原网址</th>
+                            <th>点击量</th>
+                            <th>创建时间</th>
+                            <th>类型</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for url in urls %}
+                        <tr>
+                            <td><code>{{ url[0] }}</code></td>
+                            <td><a href="{{ url[1] }}" target="_blank">{{ url[1][:50] }}...</a></td>
+                            <td>{{ url[2] }}</td>
+                            <td>{{ url[3] }}</td>
+                            <td>{% if url[4] %}自定义{% else %}自动{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="text-muted">你还没有创建任何短链接。 <a href="/">去创建</a></p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

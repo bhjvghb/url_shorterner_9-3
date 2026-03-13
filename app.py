@@ -57,7 +57,7 @@ def init_db():
     conn.commit()
     conn.close()
     print("✅ 数据库初始化完成（包含用户表）")
-
+init_db()
 # ------------------ 密码辅助函数 ------------------
 def hash_password(password):
     return generate_password_hash(password)
@@ -616,4 +616,5 @@ if __name__ == '__main__':
     print(f"📍 首页地址: http://localhost:{port}")
     print(f"🔧 管理面板: http://localhost:{port}/admin (需要用户名admin)")
     print("=" * 60)
+
     app.run(host='0.0.0.0', port=port, debug=False)

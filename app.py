@@ -25,12 +25,16 @@ RESERVED_WORDS = [
 
 # ------------------ 数据库初始化（增加用户表）------------------
 def init_db():
-    conn = sqlite3.connect('urls.db')
+    conn = sqlite3.connect('/tmp/urls.db')  # 使用临时目录，确保可写
     c = conn.cursor()
     
-    # 创建用户表（如果不存在）
+    # 为了确保结构最新，先删除旧表（开发测试用）
+    c.execute("DROP TABLE IF EXISTS url_mappings")
+    c.execute("DROP TABLE IF EXISTS users")
+    
+    # 创建用户表
     c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
             email TEXT NOT NULL UNIQUE,
@@ -41,50 +45,22 @@ def init_db():
         )
     ''')
     
-    # 创建短链接表（如果不存在）
+    # 创建短链接表
     c.execute('''
-        CREATE TABLE IF NOT EXISTS url_mappings
-        (id INTEGER PRIMARY KEY AUTOINCREMENT,
-         long_url TEXT NOT NULL,
-         short_code TEXT NOT NULL UNIQUE,
-         is_custom BOOLEAN DEFAULT 0,
-         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-         click_count INTEGER DEFAULT 0)
+        CREATE TABLE url_mappings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            long_url TEXT NOT NULL,
+            short_code TEXT NOT NULL UNIQUE,
+            is_custom BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            click_count INTEGER DEFAULT 0,
+            user_id INTEGER REFERENCES users(id)
+        )
     ''')
-    
-    # 检查并补充 url_mappings 表的列
-    c.execute("PRAGMA table_info(url_mappings)")
-    columns = [col[1] for col in c.fetchall()]
-    
-    # 定义所有需要的列及其 SQL 定义
-    required_columns = {
-        'is_custom': 'BOOLEAN DEFAULT 0',
-        'click_count': 'INTEGER DEFAULT 0',
-        'created_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
-        'user_id': 'INTEGER REFERENCES users(id)'
-    }
-    
-    for col_name, col_def in required_columns.items():
-        if col_name not in columns:
-            try:
-                c.execute(f"ALTER TABLE url_mappings ADD COLUMN {col_name} {col_def}")
-                print(f"✅ 为 url_mappings 表添加 {col_name} 列")
-            except Exception as e:
-                print(f"⚠️ 添加列 {col_name} 时出错: {e}")
-    
-    # 检查并补充 users 表的列（如果需要）
-    c.execute("PRAGMA table_info(users)")
-    user_columns = [col[1] for col in c.fetchall()]
-    if 'reset_token' not in user_columns:
-        c.execute("ALTER TABLE users ADD COLUMN reset_token TEXT")
-        print("✅ 为 users 表添加 reset_token 列")
-    if 'reset_token_expiry' not in user_columns:
-        c.execute("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP")
-        print("✅ 为 users 表添加 reset_token_expiry 列")
     
     conn.commit()
     conn.close()
-    print("✅ 数据库初始化/升级完成")
+    print("✅ 数据库重建完成")
 init_db()
 # ------------------ 密码辅助函数 ------------------
 def hash_password(password):
@@ -646,5 +622,6 @@ if __name__ == '__main__':
     print("=" * 60)
 
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 

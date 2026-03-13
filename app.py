@@ -28,17 +28,6 @@ def init_db():
     conn = sqlite3.connect('urls.db')
     c = conn.cursor()
     
-    # 创建短链接表（如果不存在）
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS url_mappings
-        (id INTEGER PRIMARY KEY AUTOINCREMENT,
-         long_url TEXT NOT NULL,
-         short_code TEXT NOT NULL UNIQUE,
-         is_custom BOOLEAN DEFAULT 0,
-         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-         click_count INTEGER DEFAULT 0)
-    ''')
-    
     # 创建用户表（如果不存在）
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
@@ -52,24 +41,46 @@ def init_db():
         )
     ''')
     
-    # 检查 url_mappings 表的列，并添加缺失的列
+    # 创建短链接表（如果不存在）
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS url_mappings
+        (id INTEGER PRIMARY KEY AUTOINCREMENT,
+         long_url TEXT NOT NULL,
+         short_code TEXT NOT NULL UNIQUE,
+         is_custom BOOLEAN DEFAULT 0,
+         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+         click_count INTEGER DEFAULT 0)
+    ''')
+    
+    # 检查并补充 url_mappings 表的列
     c.execute("PRAGMA table_info(url_mappings)")
     columns = [col[1] for col in c.fetchall()]
     
-    # 如果缺少 is_custom 列，添加它
-    if 'is_custom' not in columns:
-        c.execute("ALTER TABLE url_mappings ADD COLUMN is_custom BOOLEAN DEFAULT 0")
-        print("✅ 为 url_mappings 表添加 is_custom 列")
+    # 定义所有需要的列及其 SQL 定义
+    required_columns = {
+        'is_custom': 'BOOLEAN DEFAULT 0',
+        'click_count': 'INTEGER DEFAULT 0',
+        'created_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+        'user_id': 'INTEGER REFERENCES users(id)'
+    }
     
-    # 如果缺少 click_count 列，添加它（早期版本可能没有）
-    if 'click_count' not in columns:
-        c.execute("ALTER TABLE url_mappings ADD COLUMN click_count INTEGER DEFAULT 0")
-        print("✅ 为 url_mappings 表添加 click_count 列")
+    for col_name, col_def in required_columns.items():
+        if col_name not in columns:
+            try:
+                c.execute(f"ALTER TABLE url_mappings ADD COLUMN {col_name} {col_def}")
+                print(f"✅ 为 url_mappings 表添加 {col_name} 列")
+            except Exception as e:
+                print(f"⚠️ 添加列 {col_name} 时出错: {e}")
     
-    # 如果缺少 user_id 列，添加它（用于关联用户）
-    if 'user_id' not in columns:
-        c.execute("ALTER TABLE url_mappings ADD COLUMN user_id INTEGER REFERENCES users(id)")
-        print("✅ 为 url_mappings 表添加 user_id 列")
+    # 检查并补充 users 表的列（如果需要）
+    c.execute("PRAGMA table_info(users)")
+    user_columns = [col[1] for col in c.fetchall()]
+    if 'reset_token' not in user_columns:
+        c.execute("ALTER TABLE users ADD COLUMN reset_token TEXT")
+        print("✅ 为 users 表添加 reset_token 列")
+    if 'reset_token_expiry' not in user_columns:
+        c.execute("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP")
+        print("✅ 为 users 表添加 reset_token_expiry 列")
     
     conn.commit()
     conn.close()
@@ -635,4 +646,5 @@ if __name__ == '__main__':
     print("=" * 60)
 
     app.run(host='0.0.0.0', port=port, debug=False)
+
 

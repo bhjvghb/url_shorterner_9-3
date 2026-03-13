@@ -27,7 +27,8 @@ RESERVED_WORDS = [
 def init_db():
     conn = sqlite3.connect('urls.db')
     c = conn.cursor()
-    # 原有的短链接表
+    
+    # 创建短链接表（如果不存在）
     c.execute('''
         CREATE TABLE IF NOT EXISTS url_mappings
         (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,7 +38,8 @@ def init_db():
          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
          click_count INTEGER DEFAULT 0)
     ''')
-    # 新增用户表
+    
+    # 创建用户表（如果不存在）
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,14 +51,29 @@ def init_db():
             reset_token_expiry TIMESTAMP
         )
     ''')
-    # 为短链接表添加 user_id 列（可选，用于关联用户）
+    
+    # 检查 url_mappings 表的列，并添加缺失的列
     c.execute("PRAGMA table_info(url_mappings)")
     columns = [col[1] for col in c.fetchall()]
+    
+    # 如果缺少 is_custom 列，添加它
+    if 'is_custom' not in columns:
+        c.execute("ALTER TABLE url_mappings ADD COLUMN is_custom BOOLEAN DEFAULT 0")
+        print("✅ 为 url_mappings 表添加 is_custom 列")
+    
+    # 如果缺少 click_count 列，添加它（早期版本可能没有）
+    if 'click_count' not in columns:
+        c.execute("ALTER TABLE url_mappings ADD COLUMN click_count INTEGER DEFAULT 0")
+        print("✅ 为 url_mappings 表添加 click_count 列")
+    
+    # 如果缺少 user_id 列，添加它（用于关联用户）
     if 'user_id' not in columns:
         c.execute("ALTER TABLE url_mappings ADD COLUMN user_id INTEGER REFERENCES users(id)")
+        print("✅ 为 url_mappings 表添加 user_id 列")
+    
     conn.commit()
     conn.close()
-    print("✅ 数据库初始化完成（包含用户表）")
+    print("✅ 数据库初始化/升级完成")
 init_db()
 # ------------------ 密码辅助函数 ------------------
 def hash_password(password):
@@ -618,3 +635,4 @@ if __name__ == '__main__':
     print("=" * 60)
 
     app.run(host='0.0.0.0', port=port, debug=False)
+

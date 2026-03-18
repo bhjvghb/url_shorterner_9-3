@@ -580,6 +580,10 @@ def render_success_page(long_url, short_url, short_code, is_custom):
     </body>
     </html>
     '''
+    
+print("🚀 正在初始化数据库...")
+init_db()
+print("✅ 数据库初始化调用完成。")
 
 # ------------------ 启动 ------------------
 if __name__ == '__main__':

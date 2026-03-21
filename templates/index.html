@@ -65,6 +65,31 @@
                                        style="border: 2px solid #e9ecef; border-radius: 10px;">
                                 <div class="form-text">please enter full url including http:// or https://</div>
                             </div>
+                            
+                            <!-- 自定义短码输入框 -->
+                            <div class="mb-3">
+                                <label for="custom_code" class="form-label fw-bold">自定义短码（可选）</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="custom_code" 
+                                       name="custom_code" 
+                                       placeholder="例如：my_link (3-20个字符，仅字母数字_ -)"
+                                       style="border: 2px solid #e9ecef; border-radius: 10px;">
+                                <div class="form-text">不填则自动生成6位短码。自定义短码需满足：3-20位，字母/数字/下划线/连字符，不能是系统保留字。</div>
+                            </div>
+
+                            <!-- 有效期选择 -->
+                            <div class="mb-3">
+                                <label for="expiry" class="form-label fw-bold">有效期：</label>
+                                <select class="form-select" id="expiry" name="expiry">
+                                    <option value="forever">永久</option>
+                                    <option value="1d">1天</option>
+                                    <option value="7d">7天</option>
+                                    <option value="30d">30天</option>
+                                </select>
+                                <div class="form-text">选择短链接的有效期，过期后将无法访问。</div>
+                            </div>
+                            
                             <button type="submit" class="btn btn-primary btn-lg w-100" style="border-radius: 10px;">
                                 🚀 generate shorter url
                             </button>
@@ -74,7 +99,9 @@
                             <h5>💡 user guiedline：</h5>
                             <ol class="mb-0">
                                 <li>input your long url</li>
-                                <li> click "shorter your url!" button</li>
+                                <li>可选填写自定义短码（如不填则自动生成）</li>
+                                <li>选择有效期</li>
+                                <li>click "shorter your url!" button</li>
                                 <li>copy and share your shorter url!</li>
                             </ol>
                         </div>

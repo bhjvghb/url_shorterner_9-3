@@ -19,23 +19,29 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-producti
 # 获取环境变量中的端口（Render 会自动设置）
 port = int(os.environ.get("PORT", 5000))
 
-# 保留字列表（与之前相同）
+# 保留字列表
 RESERVED_WORDS = [
     'admin', 'api', 'login', 'register', 'dashboard', 'analytics',
     'shorten', 'r', 'static', 'user', 'users', 'profile', 'settings',
     'help', 'about', 'contact', 'privacy', 'terms', 'faq'
 ]
 
+# 有效期选项映射
+EXPIRY_OPTIONS = {
+    '1d': timedelta(days=1),
+    '7d': timedelta(days=7),
+    '30d': timedelta(days=30),
+    'forever': None
+}
+
 # ------------------ 数据库连接工厂 ------------------
 def get_db_connection():
     """根据环境变量返回 PostgreSQL 或 SQLite 连接"""
     database_url = os.environ.get('DATABASE_URL')
     if database_url:
-        # 使用 PostgreSQL
         conn = psycopg2.connect(database_url, cursor_factory=psycopg2.extras.DictCursor)
         return conn
     else:
-        # 使用 SQLite（本地开发）
         conn = sqlite3.connect('urls.db')
         conn.row_factory = sqlite3.Row
         return conn
@@ -83,7 +89,8 @@ def init_db():
                 is_custom BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 click_count INTEGER DEFAULT 0,
-                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL
+                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                expires_at TIMESTAMP
             )
         ''')
     else:
@@ -95,11 +102,12 @@ def init_db():
                 is_custom BOOLEAN DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 click_count INTEGER DEFAULT 0,
-                user_id INTEGER REFERENCES users(id)
+                user_id INTEGER REFERENCES users(id),
+                expires_at TIMESTAMP
             )
         ''')
 
-    # ---------- 检查并补充缺失的列（仅 PostgreSQL 需要，SQLite 用 ALTER 也可）----------
+    # ---------- 检查并补充缺失的列 ----------
     def column_exists(table, column):
         if is_postgres:
             cur.execute("""
@@ -134,6 +142,13 @@ def init_db():
         else:
             cur.execute("ALTER TABLE url_mappings ADD COLUMN user_id INTEGER REFERENCES users(id)")
         print("✅ 为 url_mappings 添加 user_id 列")
+
+    if not column_exists('url_mappings', 'expires_at'):
+        if is_postgres:
+            cur.execute("ALTER TABLE url_mappings ADD COLUMN expires_at TIMESTAMP")
+        else:
+            cur.execute("ALTER TABLE url_mappings ADD COLUMN expires_at TIMESTAMP")
+        print("✅ 为 url_mappings 添加 expires_at 列")
 
     # 为 users 表添加可能缺失的列
     if not column_exists('users', 'reset_token'):
@@ -171,7 +186,7 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# ------------------ 短码生成与验证（与之前相同）------------------
+# ------------------ 短码生成与验证 ------------------
 def generate_short_code(length=6):
     characters = string.ascii_letters + string.digits
     return ''.join(random.choice(characters) for _ in range(length))
@@ -215,6 +230,8 @@ def index():
 def shorten_url():
     long_url = request.form.get('long_url', '').strip()
     custom_code = request.form.get('custom_code', '').strip()
+    expiry_choice = request.form.get('expiry', 'forever')
+
     if not long_url:
         return render_error_page("请输入要缩短的URL网址")
     if not long_url.startswith(('http://', 'https://')):
@@ -253,17 +270,26 @@ def shorten_url():
 
     user_id = session.get('user_id')
 
+    # 计算过期时间
+    expires_at = None
+    if expiry_choice in EXPIRY_OPTIONS:
+        delta = EXPIRY_OPTIONS[expiry_choice]
+        if delta:
+            expires_at = datetime.now() + delta
+    else:
+        expires_at = None
+
     try:
         if is_postgres:
             cur.execute("""
-                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id)
-                VALUES (%s, %s, %s, 0, %s)
-            """, (long_url, short_code, is_custom, user_id))
+                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at)
+                VALUES (%s, %s, %s, 0, %s, %s)
+            """, (long_url, short_code, is_custom, user_id, expires_at))
         else:
             cur.execute("""
-                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id)
-                VALUES (?, ?, ?, 0, ?)
-            """, (long_url, short_code, 1 if is_custom else 0, user_id))
+                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at)
+                VALUES (?, ?, ?, 0, ?, ?)
+            """, (long_url, short_code, 1 if is_custom else 0, user_id, expires_at))
         conn.commit()
     except Exception as e:
         cur.close()
@@ -282,14 +308,19 @@ def redirect_to_long_url(short_code):
     cur = conn.cursor()
     is_postgres = os.environ.get('DATABASE_URL') is not None
 
-    cur.execute("SELECT id, long_url FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT id, long_url FROM url_mappings WHERE short_code = ?", (short_code,))
+    cur.execute("SELECT id, long_url, expires_at FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT id, long_url, expires_at FROM url_mappings WHERE short_code = ?", (short_code,))
     result = cur.fetchone()
     if not result:
         cur.close()
         conn.close()
         return render_error_page("短网址不存在或已过期", 404)
 
-    url_id, long_url = result
+    url_id, long_url, expires_at = result
+    if expires_at and expires_at < datetime.now():
+        cur.close()
+        conn.close()
+        return render_error_page("该短网址已过期", 410)
+
     cur.execute("UPDATE url_mappings SET click_count = click_count + 1 WHERE id = %s" if is_postgres else "UPDATE url_mappings SET click_count = click_count + 1 WHERE id = ?", (url_id,))
     conn.commit()
 
@@ -453,20 +484,93 @@ def dashboard():
     is_postgres = os.environ.get('DATABASE_URL') is not None
 
     cur.execute("""
-        SELECT short_code, long_url, click_count, created_at, is_custom
+        SELECT short_code, long_url, click_count, created_at, is_custom, expires_at
         FROM url_mappings
         WHERE user_id = %s
         ORDER BY created_at DESC
     """ if is_postgres else """
-        SELECT short_code, long_url, click_count, created_at, is_custom
+        SELECT short_code, long_url, click_count, created_at, is_custom, expires_at
         FROM url_mappings
         WHERE user_id = ?
         ORDER BY created_at DESC
     """, (user_id,))
-    urls = cur.fetchall()
+    rows = cur.fetchall()
+    urls = []
+    for row in rows:
+        short_code, long_url, click_count, created_at, is_custom, expires_at = row
+        is_expired = False
+        if expires_at and expires_at < datetime.now():
+            is_expired = True
+        urls.append({
+            'short_code': short_code,
+            'long_url': long_url,
+            'click_count': click_count,
+            'created_at': created_at,
+            'is_custom': is_custom,
+            'expires_at': expires_at,
+            'is_expired': is_expired
+        })
     cur.close()
     conn.close()
     return render_template('dashboard.html', urls=urls, username=session['username'])
+
+# ------------------ 删除链接 ------------------
+@app.route('/delete/<short_code>', methods=['POST'])
+@login_required
+def delete_link(short_code):
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    cur.execute("SELECT user_id FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT user_id FROM url_mappings WHERE short_code = ?", (short_code,))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return render_error_page("链接不存在", 404)
+    owner_id = row[0]
+    if owner_id != user_id and session.get('username') != 'admin':
+        cur.close()
+        conn.close()
+        return render_error_page("无权删除此链接", 403)
+
+    cur.execute("DELETE FROM url_mappings WHERE short_code = %s" if is_postgres else "DELETE FROM url_mappings WHERE short_code = ?", (short_code,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('dashboard'))
+
+# ------------------ 延长有效期 ------------------
+@app.route('/extend/<short_code>', methods=['POST'])
+@login_required
+def extend_link(short_code):
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    cur.execute("SELECT user_id FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT user_id FROM url_mappings WHERE short_code = ?", (short_code,))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return render_error_page("链接不存在", 404)
+    owner_id = row[0]
+    if owner_id != user_id and session.get('username') != 'admin':
+        cur.close()
+        conn.close()
+        return render_error_page("无权操作此链接", 403)
+
+    # 延长30天
+    if is_postgres:
+        cur.execute("UPDATE url_mappings SET expires_at = COALESCE(expires_at, NOW()) + INTERVAL '30 days' WHERE short_code = %s", (short_code,))
+    else:
+        cur.execute("UPDATE url_mappings SET expires_at = datetime(COALESCE(expires_at, CURRENT_TIMESTAMP), '+30 days') WHERE short_code = ?", (short_code,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('dashboard'))
 
 # ------------------ 管理面板 ------------------
 @app.route('/admin')
@@ -484,54 +588,59 @@ def admin_dashboard():
     custom_urls = cur.fetchone()[0]
     cur.execute("SELECT COALESCE(SUM(click_count), 0) FROM url_mappings")
     total_clicks = cur.fetchone()[0]
+
     cur.execute("""
-        SELECT id, short_code, long_url, is_custom, created_at, click_count
+        SELECT id, short_code, long_url, is_custom, created_at, click_count, expires_at
         FROM url_mappings
         ORDER BY created_at DESC
         LIMIT 20
     """)
     recent_urls = cur.fetchall()
+
+    cur.execute("SELECT id, username, email, created_at FROM users ORDER BY id")
+    users = cur.fetchall()
     cur.close()
     conn.close()
 
-    table_rows = ""
-    for url in recent_urls:
-        url_id, short_code, long_url, is_custom, created_at, clicks = url
-        custom_str = '✅' if is_custom else '❌'
-        table_rows += f"""
-        <tr>
-            <td>{url_id}</td>
-            <td><code>{short_code}</code></td>
-            <td>{custom_str}</td>
-            <td><a href="{long_url}" target="_blank">{long_url[:50]}...</a></td>
-            <td>{created_at}</td>
-            <td>{clicks}</td>
-        </tr>
-        """
-    return f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>管理面板</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>body {{ background: #f8f9fa; padding: 20px; }} .stat-card {{ background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }} .table-container {{ background: white; padding: 20px; border-radius: 10px; }}</style>
-    </head>
-    <body>
-        <div class="container">
-            <h1 class="mb-4">🔧 管理面板</h1>
-            <p>欢迎，{session['username']}！ <a href="/logout">登出</a></p>
-            <div class="row mb-4">
-                <div class="col-md-3"><div class="stat-card text-center"><h3>{total_urls}</h3><p class="text-muted">总链接数</p></div></div>
-                <div class="col-md-3"><div class="stat-card text-center"><h3>{custom_urls}</h3><p class="text-muted">自定义链接</p></div></div>
-                <div class="col-md-3"><div class="stat-card text-center"><h3>{total_clicks}</h3><p class="text-muted">总点击量</p></div></div>
-                <div class="col-md-3"><div class="stat-card text-center"><h3><a href="/" target="_blank">🔗</a></h3><p class="text-muted">访问前台</p></div></div>
-            </div>
-            <div class="table-container"><h4>最近创建的链接</h4><table class="table table-striped"><thead><tr><th>ID</th><th>短码</th><th>自定义</th><th>原网址</th><th>创建时间</th><th>点击量</th></tr></thead><tbody>{table_rows}</tbody></table></div>
-            <div class="mt-3"><a href="/" class="btn btn-primary">返回首页</a> <a href="/admin" class="btn btn-secondary">刷新</a></div>
-        </div>
-    </body>
-    </html>
-    '''
+    return render_template('admin_dashboard.html',
+                         total_urls=total_urls,
+                         custom_urls=custom_urls,
+                         total_clicks=total_clicks,
+                         recent_urls=recent_urls,
+                         users=users,
+                         username=session['username'])
+
+# ------------------ 管理员删除用户 ------------------
+@app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
+@login_required
+def admin_delete_user(user_id):
+    if session.get('username') != 'admin':
+        abort(403)
+    if user_id == session['user_id']:
+        return render_error_page("不能删除自己", 400)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+    cur.execute("DELETE FROM users WHERE id = %s" if is_postgres else "DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('admin_dashboard'))
+
+# ------------------ 管理员删除链接 ------------------
+@app.route('/admin/link/<int:link_id>/delete', methods=['POST'])
+@login_required
+def admin_delete_link(link_id):
+    if session.get('username') != 'admin':
+        abort(403)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+    cur.execute("DELETE FROM url_mappings WHERE id = %s" if is_postgres else "DELETE FROM url_mappings WHERE id = ?", (link_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('admin_dashboard'))
 
 # ------------------ 错误页面 ------------------
 def render_error_page(message, status_code=400):
@@ -580,11 +689,10 @@ def render_success_page(long_url, short_url, short_code, is_custom):
     </body>
     </html>
     '''
-    
+
 print("🚀 正在初始化数据库...")
 init_db()
 print("✅ 数据库初始化调用完成。")
-
 # ------------------ 启动 ------------------
 if __name__ == '__main__':
     init_db()

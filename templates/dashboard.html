@@ -8,6 +8,8 @@
     <style>
         body { background: #f8f9fa; padding: 20px; }
         .dashboard-card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .expired { color: red; font-weight: bold; }
+        .active { color: green; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -15,7 +17,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1>👤 {{ username }} 的短链接</h1>
             <div>
-                <a href="/" class="btn btn-outline-primary">首页</a>
+                <a href="/" class="btn btn-outline-primary">创建新链接</a>
                 <a href="/logout" class="btn btn-outline-danger">登出</a>
             </div>
         </div>
@@ -23,32 +25,55 @@
         <div class="dashboard-card">
             <h4>我的短链接列表</h4>
             {% if urls %}
-                <table class="table table-striped">
-                    <thead>
-                        <tr>
-                            <th>短码</th>
-                            <th>原网址</th>
-                            <th>点击量</th>
-                            <th>创建时间</th>
-                            <th>类型</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for url in urls %}
-                        <tr>
-                            <td><code>{{ url[0] }}</code></td>
-                            <td><a href="{{ url[1] }}" target="_blank">{{ url[1][:50] }}...</a></td>
-                            <td>{{ url[2] }}</td>
-                            <td>{{ url[3] }}</td>
-                            <td>{% if url[4] %}自定义{% else %}自动{% endif %}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>短码</th>
+                                <th>原网址</th>
+                                <th>点击量</th>
+                                <th>创建时间</th>
+                                <th>过期时间</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for url in urls %}
+                            <tr>
+                                <td><code>{{ url.short_code }}</code></td>
+                                <td><a href="{{ url.long_url }}" target="_blank">{{ url.long_url[:50] }}...</a></td>
+                                <td>{{ url.click_count }}</td>
+                                <td>{{ url.created_at }}</td>
+                                <td>{{ url.expires_at if url.expires_at else '永久' }}</td>
+                                <td>
+                                    {% if url.is_expired %}
+                                        <span class="expired">已过期</span>
+                                    {% else %}
+                                        <span class="active">有效</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form action="/delete/{{ url.short_code }}" method="POST" style="display:inline;">
+                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定删除此链接吗？')">删除</button>
+                                    </form>
+                                    {% if url.expires_at %}
+                                    <form action="/extend/{{ url.short_code }}" method="POST" style="display:inline;">
+                                        <button type="submit" class="btn btn-sm btn-success">延长30天</button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             {% else %}
-                <p class="text-muted">你仲没有创建任何短链接。 <a href="/">去创建</a></p>
+                <p class="text-muted">你还没有创建任何短链接。 <a href="/">去创建</a></p>
             {% endif %}
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

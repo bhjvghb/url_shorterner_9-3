@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session, abort
+# from flask_babel import Babel, gettext as _  # 已删除，未使用
 import os
 import re
 import string
@@ -7,6 +8,8 @@ import uuid
 from datetime import datetime, timedelta
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
+import qrcode
+from PIL import Image
 
 # 数据库适配优先使用 PostgreSQL（通过环境变量 DATABASE_URL），否则回退到 SQLite
 import sqlite3
@@ -299,7 +302,22 @@ def shorten_url():
     cur.close()
     conn.close()
     short_url = f"{request.host_url}{short_code}"
-    return render_success_page(long_url, short_url, short_code, is_custom)
+    
+    # ------------------ 生成二维码 ------------------
+    try:
+        # 确保目录存在
+        qrcode_dir = os.path.join(app.static_folder, 'qrcodes')
+        os.makedirs(qrcode_dir, exist_ok=True)
+        
+        # 生成二维码图片
+        img = qrcode.make(short_url)
+        img_path = os.path.join(qrcode_dir, f'{short_code}.png')
+        img.save(img_path)
+    except Exception as e:
+        # 二维码生成失败不影响主要功能，仅打印错误
+        print(f"⚠️ 二维码生成失败: {e}")
+    
+    return render_success_page(long_url, short_url, short_code, is_custom, expires_at)
 
 # ------------------ 重定向 ------------------
 @app.route('/<short_code>')
@@ -539,6 +557,15 @@ def delete_link(short_code):
     conn.commit()
     cur.close()
     conn.close()
+    
+    # 可选：删除对应的二维码文件
+    try:
+        qrcode_path = os.path.join(app.static_folder, 'qrcodes', f'{short_code}.png')
+        if os.path.exists(qrcode_path):
+            os.remove(qrcode_path)
+    except:
+        pass
+    
     return redirect(url_for('dashboard'))
 
 # ------------------ 延长有效期 ------------------
@@ -666,26 +693,91 @@ def render_error_page(message, status_code=400):
     ''', status_code
 
 # ------------------ 成功页面 ------------------
-def render_success_page(long_url, short_url, short_code, is_custom):
+def render_success_page(long_url, short_url, short_code, is_custom, expires_at):
+    # 生成二维码图片 URL（如果存在）
+    qrcode_url = url_for('static', filename=f'qrcodes/{short_code}.png')
+    # 检查二维码文件是否存在（避免显示坏图）
+    qrcode_exists = os.path.exists(os.path.join(app.static_folder, 'qrcodes', f'{short_code}.png'))
+    
+    expiry_text = "永久有效"
+    if expires_at:
+        expiry_text = expires_at.strftime("%Y-%m-%d %H:%M:%S")
+    
     return f'''
     <!DOCTYPE html>
     <html>
     <head>
         <title>缩短成功</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>body {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; }} .success-container {{ background: white; border-radius: 15px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-width: 700px; margin: 0 auto; }} .url-box {{ background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 10px; padding: 15px; margin: 15px 0; word-break: break-all; }} .custom-badge {{ background: linear-gradient(135deg, #ff6b6b, #ee5a24); color: white; padding: 5px 15px; border-radius: 20px; font-size: 0.9em; font-weight: bold; }}</style>
+        <style>
+            body {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; }}
+            .success-container {{ background: white; border-radius: 15px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-width: 700px; margin: 0 auto; }}
+            .url-box {{ background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 10px; padding: 15px; margin: 15px 0; word-break: break-all; }}
+            .custom-badge {{ background: linear-gradient(135deg, #ff6b6b, #ee5a24); color: white; padding: 5px 15px; border-radius: 20px; font-size: 0.9em; font-weight: bold; }}
+            .qrcode {{ max-width: 200px; margin: 20px auto; border: 1px solid #ddd; border-radius: 10px; padding: 10px; background: white; }}
+        </style>
     </head>
     <body>
         <div class="container">
             <div class="success-container">
-                <div class="text-center mb-4"><h1 style="font-size:80px;color:#28a745;">✅</h1><h2 class="text-success">缩短成功！{f'<span class="custom-badge ms-2">自定义短码</span>' if is_custom else ''}</h2></div>
-                <div class="mb-4"><h5>📎 原始网址：</h5><div class="url-box"><a href="{long_url}" target="_blank">{long_url}</a></div><h5>🔗 短网址：</h5><div class="url-box"><a href="{short_url}" id="short-url" target="_blank" style="font-size:1.2em;font-weight:bold;">{short_url}</a></div>{f'<div class="alert alert-info mt-3"><strong>🎉 好消息！</strong> 你使用了自定义短码 <code>{short_code}</code>，这个链接更容易记忆和分享！</div>' if is_custom else ''}</div>
-                <div class="text-center mt-4"><button class="btn btn-success btn-lg px-5" onclick="copyToClipboard()">📋 复制短网址</button><a href="{short_url}" target="_blank" class="btn btn-primary btn-lg px-5">🔗 测试访问</a><a href="/" class="btn btn-outline-primary btn-lg px-5">🏠 返回首页</a></div>
-                <div class="mt-4 text-center"><div class="btn-group" role="group"><button class="btn btn-outline-secondary btn-sm" onclick="shareOnTwitter()">🐦 Twitter</button><button class="btn btn-outline-secondary btn-sm" onclick="shareOnWhatsApp()">💬 WhatsApp</button><button class="btn btn-outline-secondary btn-sm" onclick="shareOnEmail()">📧 Email</button></div></div>
-                <div class="mt-4 alert alert-light"><h6>📊 统计信息：</h6><p class="mb-1">• 短码：<code>{short_code}</code></p><p class="mb-1">• 类型：{'自定义' if is_custom else '系统生成'}</p><p class="mb-0">• 创建时间：{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p></div>
+                <div class="text-center mb-4">
+                    <h1 style="font-size:80px;color:#28a745;">✅</h1>
+                    <h2 class="text-success">缩短成功！{f'<span class="custom-badge ms-2">自定义短码</span>' if is_custom else ''}</h2>
+                </div>
+                <div class="mb-4">
+                    <h5>📎 原始网址：</h5>
+                    <div class="url-box"><a href="{long_url}" target="_blank">{long_url}</a></div>
+                    <h5>🔗 短网址：</h5>
+                    <div class="url-box"><a href="{short_url}" id="short-url" target="_blank" style="font-size:1.2em;font-weight:bold;">{short_url}</a></div>
+                    {f'<div class="alert alert-info mt-3"><strong>🎉 好消息！</strong> 你使用了自定义短码 <code>{short_code}</code>，这个链接更容易记忆和分享！</div>' if is_custom else ''}
+                </div>
+                
+                <!-- 二维码区域 -->
+                <div class="text-center mb-4">
+                    <h5>📱 扫描二维码访问</h5>
+                    {'<img class="qrcode" src="' + qrcode_url + '" alt="QR Code">' if qrcode_exists else '<p class="text-muted">二维码生成失败</p>'}
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadQRCode()">💾 下载二维码</button>
+                    </div>
+                </div>
+                
+                <div class="text-center mt-4">
+                    <button class="btn btn-success btn-lg px-5" onclick="copyToClipboard()">📋 复制短网址</button>
+                    <a href="{short_url}" target="_blank" class="btn btn-primary btn-lg px-5">🔗 测试访问</a>
+                    <a href="/" class="btn btn-outline-primary btn-lg px-5">🏠 返回首页</a>
+                </div>
+                <div class="mt-4 text-center">
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="shareOnTwitter()">🐦 Twitter</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="shareOnWhatsApp()">💬 WhatsApp</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="shareOnEmail()">📧 Email</button>
+                    </div>
+                </div>
+                <div class="mt-4 alert alert-light">
+                    <h6>📊 统计信息：</h6>
+                    <p class="mb-1">• 短码：<code>{short_code}</code></p>
+                    <p class="mb-1">• 类型：{'自定义' if is_custom else '系统生成'}</p>
+                    <p class="mb-0">• 有效期：{expiry_text}</p>
+                </div>
             </div>
         </div>
-        <script>function copyToClipboard() {{ navigator.clipboard.writeText("{short_url}"); alert('✅ 已复制到剪贴板！'); }} function shareOnTwitter() {{ const text = `我用自制的URL缩短器创建了一个短链接：{short_url}`; window.open(`https://twitter.com/intent/tweet?text=${{encodeURIComponent(text)}}`, '_blank'); }} function shareOnWhatsApp() {{ const text = `分享一个短链接：{short_url}`; window.open(`https://wa.me/?text=${{encodeURIComponent(text)}}`, '_blank'); }} function shareOnEmail() {{ const subject = "分享短链接"; const body = `这是我创建的短链接：{short_url}`; window.location.href = `mailto:?subject=${{encodeURIComponent(subject)}}&body=${{encodeURIComponent(body)}}`; }}</script>
+        <script>
+            function copyToClipboard() {{ navigator.clipboard.writeText("{short_url}"); alert('✅ 已复制到剪贴板！'); }}
+            function shareOnTwitter() {{ const text = `我用自制的URL缩短器创建了一个短链接：{short_url}`; window.open(`https://twitter.com/intent/tweet?text=${{encodeURIComponent(text)}}`, '_blank'); }}
+            function shareOnWhatsApp() {{ const text = `分享一个短链接：{short_url}`; window.open(`https://wa.me/?text=${{encodeURIComponent(text)}}`, '_blank'); }}
+            function shareOnEmail() {{ const subject = "分享短链接"; const body = `这是我创建的短链接：{short_url}`; window.location.href = `mailto:?subject=${{encodeURIComponent(subject)}}&body=${{encodeURIComponent(body)}}`; }}
+            function downloadQRCode() {{
+                var img = document.querySelector('.qrcode');
+                if (img) {{
+                    var link = document.createElement('a');
+                    link.href = img.src;
+                    link.download = 'qrcode_{short_code}.png';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }}
+            }}
+        </script>
     </body>
     </html>
     '''
@@ -693,6 +785,11 @@ def render_success_page(long_url, short_url, short_code, is_custom):
 print("🚀 正在初始化数据库...")
 init_db()
 print("✅ 数据库初始化调用完成。")
+
+# 创建二维码存储目录（如果不存在）
+qrcode_dir = os.path.join(app.static_folder, 'qrcodes')
+os.makedirs(qrcode_dir, exist_ok=True)
+
 # ------------------ 启动 ------------------
 if __name__ == '__main__':
     init_db()

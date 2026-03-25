@@ -800,3 +800,8 @@ if __name__ == '__main__':
     print(f"🔧 管理面板: http://localhost:{port}/admin (需要用户名admin)")
     print("=" * 60)
     app.run(host='0.0.0.0', port=port, debug=False)
+
+
+
+
+

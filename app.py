@@ -1,97 +1,178 @@
 from flask import Flask, render_template, request, redirect, url_for, session, abort
-import sqlite3
-import string
-import random
+# from flask_babel import Babel, gettext as _  # 已删除，未使用
 import os
 import re
-from datetime import datetime, timedelta
-from werkzeug.security import generate_password_hash, check_password_hash
+import string
+import random
 import uuid
+from datetime import datetime, timedelta
 from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
+import qrcode
+from PIL import Image
+
+# 数据库适配优先使用 PostgreSQL（通过环境变量 DATABASE_URL），否则回退到 SQLite
+import sqlite3
+import psycopg2
+import psycopg2.extras
 
 app = Flask(__name__)
-# 设置一个安全的 secret key（生产环境应从环境变量读取）
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-# 获取环境变量中的端口，Render会提供这个
+# 获取环境变量中的端口（Render 会自动设置）
 port = int(os.environ.get("PORT", 5000))
 
-# 保留字列表，防止与系统路由冲突
+# 保留字列表
 RESERVED_WORDS = [
     'admin', 'api', 'login', 'register', 'dashboard', 'analytics',
     'shorten', 'r', 'static', 'user', 'users', 'profile', 'settings',
     'help', 'about', 'contact', 'privacy', 'terms', 'faq'
 ]
 
-# ------------------ 数据库初始化（增加用户表）------------------
-def init_db():
-    conn = sqlite3.connect('urls.db')
-    c = conn.cursor()
-    
-    # 创建用户表（如果不存在）
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            email TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            reset_token TEXT,
-            reset_token_expiry TIMESTAMP
-        )
-    ''')
-    
-    # 检查 url_mappings 表是否存在，以及是否缺少 created_at 列
-    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='url_mappings'")
-    table_exists = c.fetchone()
-    
-    if table_exists:
-        # 检查列
-        c.execute("PRAGMA table_info(url_mappings)")
-        columns = [col[1] for col in c.fetchall()]
-        if 'created_at' not in columns:
-            # 缺少 created_at，删除并重建表（数据会丢失）
-            print("⚠️ url_mappings 表缺少 created_at 列，正在重建表...")
-            c.execute("DROP TABLE url_mappings")
-            # 重建表（会丢失所有现有短链接数据）
-            c.execute('''
-                CREATE TABLE url_mappings
-                (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 long_url TEXT NOT NULL,
-                 short_code TEXT NOT NULL UNIQUE,
-                 is_custom BOOLEAN DEFAULT 0,
-                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                 click_count INTEGER DEFAULT 0,
-                 user_id INTEGER REFERENCES users(id))
-            ''')
-            print("✅ url_mappings 表已重建")
+# 有效期选项映射
+EXPIRY_OPTIONS = {
+    '1d': timedelta(days=1),
+    '7d': timedelta(days=7),
+    '30d': timedelta(days=30),
+    'forever': None
+}
+
+# ------------------ 数据库连接工厂 ------------------
+def get_db_connection():
+    """根据环境变量返回 PostgreSQL 或 SQLite 连接"""
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url:
+        conn = psycopg2.connect(database_url, cursor_factory=psycopg2.extras.DictCursor)
+        return conn
     else:
-        # 表不存在，直接创建
-        c.execute('''
-            CREATE TABLE url_mappings
-            (id INTEGER PRIMARY KEY AUTOINCREMENT,
-             long_url TEXT NOT NULL,
-             short_code TEXT NOT NULL UNIQUE,
-             is_custom BOOLEAN DEFAULT 0,
-             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-             click_count INTEGER DEFAULT 0,
-             user_id INTEGER REFERENCES users(id))
+        conn = sqlite3.connect('urls.db')
+        conn.row_factory = sqlite3.Row
+        return conn
+
+# ------------------ 数据库初始化（PostgreSQL 版） ------------------
+def init_db():
+    """创建表并检查/补充缺失列（支持 PostgreSQL 和 SQLite）"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    # ---------- 创建 users 表 ----------
+    if is_postgres:
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(100) NOT NULL UNIQUE,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                password_hash VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                reset_token VARCHAR(36),
+                reset_token_expiry TIMESTAMP
+            )
         ''')
-    
-    # 检查并补充其他可能缺失的列（针对 users 表）
-    c.execute("PRAGMA table_info(users)")
-    user_columns = [col[1] for col in c.fetchall()]
-    if 'reset_token' not in user_columns:
-        c.execute("ALTER TABLE users ADD COLUMN reset_token TEXT")
-        print("✅ 为 users 表添加 reset_token 列")
-    if 'reset_token_expiry' not in user_columns:
-        c.execute("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP")
-        print("✅ 为 users 表添加 reset_token_expiry 列")
-    
+    else:
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                reset_token TEXT,
+                reset_token_expiry TIMESTAMP
+            )
+        ''')
+
+    # ---------- 创建 url_mappings 表 ----------
+    if is_postgres:
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS url_mappings (
+                id SERIAL PRIMARY KEY,
+                long_url TEXT NOT NULL,
+                short_code VARCHAR(50) NOT NULL UNIQUE,
+                is_custom BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                click_count INTEGER DEFAULT 0,
+                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                expires_at TIMESTAMP
+            )
+        ''')
+    else:
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS url_mappings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                long_url TEXT NOT NULL,
+                short_code TEXT NOT NULL UNIQUE,
+                is_custom BOOLEAN DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                click_count INTEGER DEFAULT 0,
+                user_id INTEGER REFERENCES users(id),
+                expires_at TIMESTAMP
+            )
+        ''')
+
+    # ---------- 检查并补充缺失的列 ----------
+    def column_exists(table, column):
+        if is_postgres:
+            cur.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name=%s AND column_name=%s
+            """, (table, column))
+            return cur.fetchone() is not None
+        else:
+            cur.execute(f"PRAGMA table_info({table})")
+            columns = [row[1] for row in cur.fetchall()]
+            return column in columns
+
+    # 为 url_mappings 添加可能缺失的列
+    if not column_exists('url_mappings', 'is_custom'):
+        if is_postgres:
+            cur.execute("ALTER TABLE url_mappings ADD COLUMN is_custom BOOLEAN DEFAULT FALSE")
+        else:
+            cur.execute("ALTER TABLE url_mappings ADD COLUMN is_custom BOOLEAN DEFAULT 0")
+        print("✅ 为 url_mappings 添加 is_custom 列")
+
+    if not column_exists('url_mappings', 'click_count'):
+        if is_postgres:
+            cur.execute("ALTER TABLE url_mappings ADD COLUMN click_count INTEGER DEFAULT 0")
+        else:
+            cur.execute("ALTER TABLE url_mappings ADD COLUMN click_count INTEGER DEFAULT 0")
+        print("✅ 为 url_mappings 添加 click_count 列")
+
+    if not column_exists('url_mappings', 'user_id'):
+        if is_postgres:
+            cur.execute("ALTER TABLE url_mappings ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL")
+        else:
+            cur.execute("ALTER TABLE url_mappings ADD COLUMN user_id INTEGER REFERENCES users(id)")
+        print("✅ 为 url_mappings 添加 user_id 列")
+
+    if not column_exists('url_mappings', 'expires_at'):
+        if is_postgres:
+            cur.execute("ALTER TABLE url_mappings ADD COLUMN expires_at TIMESTAMP")
+        else:
+            cur.execute("ALTER TABLE url_mappings ADD COLUMN expires_at TIMESTAMP")
+        print("✅ 为 url_mappings 添加 expires_at 列")
+
+    # 为 users 表添加可能缺失的列
+    if not column_exists('users', 'reset_token'):
+        if is_postgres:
+            cur.execute("ALTER TABLE users ADD COLUMN reset_token VARCHAR(36)")
+        else:
+            cur.execute("ALTER TABLE users ADD COLUMN reset_token TEXT")
+        print("✅ 为 users 添加 reset_token 列")
+
+    if not column_exists('users', 'reset_token_expiry'):
+        if is_postgres:
+            cur.execute("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP")
+        else:
+            cur.execute("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP")
+        print("✅ 为 users 添加 reset_token_expiry 列")
+
     conn.commit()
+    cur.close()
     conn.close()
     print("✅ 数据库初始化/升级完成")
-init_db()
+
 # ------------------ 密码辅助函数 ------------------
 def hash_password(password):
     return generate_password_hash(password)
@@ -108,16 +189,14 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# ------------------ 原有的短码生成与验证函数（保持不变）------------------
+# ------------------ 短码生成与验证 ------------------
 def generate_short_code(length=6):
     characters = string.ascii_letters + string.digits
     return ''.join(random.choice(characters) for _ in range(length))
 
 def validate_custom_code(code):
-    # 长度检查
     if len(code) < 3 or len(code) > 20:
         return False, "长度必须在3-20个字符之间"
-    # 格式检查：只允许字母、数字、下划线、连字符
     if not re.match(r'^[a-zA-Z0-9_-]+$', code):
         return False, "只能包含字母、数字、下划线(_)和连字符(-)"
     if code.startswith('-') or code.endswith('-'):
@@ -131,103 +210,151 @@ def validate_custom_code(code):
 # ------------------ 首页 ------------------
 @app.route('/')
 def index():
-    # 如果希望强制登录，可取消下面两行的注释
     if 'user_id' not in session:
-         return redirect(url_for('login'))
+        return redirect(url_for('login'))
 
-    conn = sqlite3.connect('urls.db')
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM url_mappings")
-    total_urls = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM url_mappings WHERE is_custom = 1")
-    custom_urls = c.fetchone()[0]
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM url_mappings")
+    total_urls = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM url_mappings WHERE is_custom = true")
+    custom_urls = cur.fetchone()[0]
+    cur.close()
     conn.close()
     return render_template('index.html',
                          total_urls=total_urls,
                          custom_urls=custom_urls,
                          host_url=request.host_url,
-                         session=session)  # 将 session 传给模板，用于显示登录状态
+                         session=session)
 
-# ------------------ 缩短URL（修改：关联当前用户）------------------
+# ------------------ 缩短URL ------------------
 @app.route('/shorten', methods=['POST'])
 @login_required
 def shorten_url():
     long_url = request.form.get('long_url', '').strip()
     custom_code = request.form.get('custom_code', '').strip()
+    expiry_choice = request.form.get('expiry', 'forever')
+
     if not long_url:
-        return render_error_page("请输入要缩短的网址")
+        return render_error_page("请输入要缩短的URL网址")
     if not long_url.startswith(('http://', 'https://')):
         long_url = 'https://' + long_url
 
-    conn = sqlite3.connect('urls.db')
-    c = conn.cursor()
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
 
     if custom_code:
         is_valid, error_msg = validate_custom_code(custom_code)
         if not is_valid:
+            cur.close()
             conn.close()
             return render_error_page(f"自定义短码错误: {error_msg}")
-        c.execute("SELECT * FROM url_mappings WHERE short_code = ?", (custom_code,))
-        if c.fetchone():
+        cur.execute("SELECT * FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT * FROM url_mappings WHERE short_code = ?", (custom_code,))
+        if cur.fetchone():
+            cur.close()
             conn.close()
             return render_error_page(f"短码 '{custom_code}' 已被使用，请换一个")
         short_code = custom_code
-        is_custom = 1
+        is_custom = True
     else:
         attempts = 0
         while attempts < 10:
             short_code = generate_short_code(6)
-            c.execute("SELECT * FROM url_mappings WHERE short_code = ?", (short_code,))
-            if not c.fetchone() and short_code.lower() not in RESERVED_WORDS:
+            cur.execute("SELECT * FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT * FROM url_mappings WHERE short_code = ?", (short_code,))
+            if not cur.fetchone() and short_code.lower() not in RESERVED_WORDS:
                 break
             attempts += 1
         else:
+            cur.close()
             conn.close()
             return render_error_page("生成短码失败，请重试")
-        is_custom = 0
+        is_custom = False
 
-    # 获取当前登录用户ID（如果有）
-    user_id = session.get('user_id', None)
+    user_id = session.get('user_id')
+
+    # 计算过期时间
+    expires_at = None
+    if expiry_choice in EXPIRY_OPTIONS:
+        delta = EXPIRY_OPTIONS[expiry_choice]
+        if delta:
+            expires_at = datetime.now() + delta
+    else:
+        expires_at = None
 
     try:
-        c.execute("""
-            INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id)
-            VALUES (?, ?, ?, 0, ?)
-        """, (long_url, short_code, is_custom, user_id))
+        if is_postgres:
+            cur.execute("""
+                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at)
+                VALUES (%s, %s, %s, 0, %s, %s)
+            """, (long_url, short_code, is_custom, user_id, expires_at))
+        else:
+            cur.execute("""
+                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at)
+                VALUES (?, ?, ?, 0, ?, ?)
+            """, (long_url, short_code, 1 if is_custom else 0, user_id, expires_at))
         conn.commit()
-        url_id = c.lastrowid
-    except sqlite3.IntegrityError as e:
+    except Exception as e:
+        cur.close()
         conn.close()
         return render_error_page(f"数据库错误: {str(e)}")
 
+    cur.close()
     conn.close()
     short_url = f"{request.host_url}{short_code}"
-    return render_success_page(long_url, short_url, short_code, is_custom)
+    
+    # ------------------ 生成二维码 ------------------
+    try:
+        # 确保目录存在
+        qrcode_dir = os.path.join(app.static_folder, 'qrcodes')
+        os.makedirs(qrcode_dir, exist_ok=True)
+        
+        # 生成二维码图片
+        img = qrcode.make(short_url)
+        img_path = os.path.join(qrcode_dir, f'{short_code}.png')
+        img.save(img_path)
+    except Exception as e:
+        # 二维码生成失败不影响主要功能，仅打印错误
+        print(f"⚠️ 二维码生成失败: {e}")
+    
+    return render_success_page(long_url, short_url, short_code, is_custom, expires_at)
 
-# ------------------ 重定向到原网址（保持不变）------------------
+# ------------------ 重定向 ------------------
 @app.route('/<short_code>')
 def redirect_to_long_url(short_code):
-    conn = sqlite3.connect('urls.db')
-    c = conn.cursor()
-    c.execute("SELECT id, long_url FROM url_mappings WHERE short_code = ?", (short_code,))
-    result = c.fetchone()
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    cur.execute("SELECT id, long_url, expires_at FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT id, long_url, expires_at FROM url_mappings WHERE short_code = ?", (short_code,))
+    result = cur.fetchone()
     if not result:
+        cur.close()
         conn.close()
         return render_error_page("短网址不存在或已过期", 404)
-    url_id, long_url = result
-    c.execute("UPDATE url_mappings SET click_count = click_count + 1 WHERE id = ?", (url_id,))
+
+    url_id, long_url, expires_at = result
+    if expires_at and expires_at < datetime.now():
+        cur.close()
+        conn.close()
+        return render_error_page("该短网址已过期", 410)
+
+    cur.execute("UPDATE url_mappings SET click_count = click_count + 1 WHERE id = %s" if is_postgres else "UPDATE url_mappings SET click_count = click_count + 1 WHERE id = ?", (url_id,))
     conn.commit()
-    # 简单日志
+
+    # 简单日志（可扩展为点击记录表）
     try:
         ip_address = request.remote_addr
         user_agent = request.headers.get('User-Agent', 'Unknown')
         print(f"📊 访问记录: {short_code} | IP: {ip_address} | UA: {user_agent[:50]}...")
     except:
         pass
+
+    cur.close()
     conn.close()
     return redirect(long_url)
 
-# ------------------ 新增：用户注册 ------------------
+# ------------------ 注册 ------------------
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -243,88 +370,106 @@ def register():
         if len(password) < 6:
             return render_error_page("密码至少6位")
 
-        conn = sqlite3.connect('urls.db')
-        c = conn.cursor()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        is_postgres = os.environ.get('DATABASE_URL') is not None
+
         try:
-            c.execute("INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
-                      (username, email, hash_password(password)))
-            conn.commit()
-        except sqlite3.IntegrityError as e:
-            conn.close()
-            if "username" in str(e):
-                return render_error_page("用户名已存在")
-            elif "email" in str(e):
-                return render_error_page("邮箱已被注册")
+            if is_postgres:
+                cur.execute("""
+                    INSERT INTO users (username, email, password_hash)
+                    VALUES (%s, %s, %s)
+                """, (username, email, hash_password(password)))
             else:
-                return render_error_page("注册失败，请稍后重试")
-        conn.close()
+                cur.execute("""
+                    INSERT INTO users (username, email, password_hash)
+                    VALUES (?, ?, ?)
+                """, (username, email, hash_password(password)))
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            if 'duplicate key' in str(e).lower() or 'unique constraint' in str(e).lower():
+                if 'username' in str(e).lower():
+                    return render_error_page("用户名已存在")
+                elif 'email' in str(e).lower():
+                    return render_error_page("邮箱已被注册")
+            return render_error_page(f"注册失败: {str(e)}")
+        finally:
+            cur.close()
+            conn.close()
         return redirect(url_for('login'))
     return render_template('register.html')
 
-# ------------------ 新增：用户登录 ------------------
+# ------------------ 登录 ------------------
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username_or_email = request.form['username'].strip()
         password = request.form['password']
 
-        conn = sqlite3.connect('urls.db')
-        c = conn.cursor()
-        c.execute("SELECT id, username, password_hash FROM users WHERE username=? OR email=?",
-                  (username_or_email, username_or_email))
-        user = c.fetchone()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        is_postgres = os.environ.get('DATABASE_URL') is not None
+
+        cur.execute("SELECT id, username, password_hash FROM users WHERE username = %s OR email = %s" if is_postgres else "SELECT id, username, password_hash FROM users WHERE username = ? OR email = ?", (username_or_email, username_or_email))
+        user = cur.fetchone()
+        cur.close()
         conn.close()
 
         if user and verify_password(user[2], password):
             session['user_id'] = user[0]
             session['username'] = user[1]
-            # 登录成功后重定向到首页（或仪表盘）
             return redirect(url_for('index'))
         else:
             return render_error_page("用户名/邮箱或密码错误")
     return render_template('login.html')
 
-# ------------------ 新增：用户登出 ------------------
+# ------------------ 登出 ------------------
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('index'))
 
-# ------------------ 新增：忘记密码 ------------------
+# ------------------ 忘记密码 ------------------
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
         email = request.form['email'].strip()
-        conn = sqlite3.connect('urls.db')
-        c = conn.cursor()
-        c.execute("SELECT id FROM users WHERE email=?", (email,))
-        user = c.fetchone()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        is_postgres = os.environ.get('DATABASE_URL') is not None
+
+        cur.execute("SELECT id FROM users WHERE email = %s" if is_postgres else "SELECT id FROM users WHERE email = ?", (email,))
+        user = cur.fetchone()
         if user:
             token = str(uuid.uuid4())
             expiry = datetime.now() + timedelta(hours=1)
-            c.execute("UPDATE users SET reset_token=?, reset_token_expiry=? WHERE id=?",
-                      (token, expiry, user[0]))
+            if is_postgres:
+                cur.execute("UPDATE users SET reset_token = %s, reset_token_expiry = %s WHERE id = %s", (token, expiry, user[0]))
+            else:
+                cur.execute("UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?", (token, expiry, user[0]))
             conn.commit()
             reset_link = url_for('reset_password', token=token, _external=True)
-            # 模拟发送邮件：打印到控制台
             print(f"密码重置链接: {reset_link}")
-            # 为了方便测试，我们直接在页面上显示链接（生产环境应改为发送邮件）
+            cur.close()
             conn.close()
             return f"重置链接已生成：<a href='{reset_link}'>{reset_link}</a>"
+        cur.close()
         conn.close()
-        # 无论邮箱是否存在都返回相同提示，防止用户枚举
         return "如果邮箱存在，重置链接已发送，请查收。"
     return render_template('forgot_password.html')
 
-# ------------------ 新增：重置密码 ------------------
+# ------------------ 重置密码 ------------------
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
-    conn = sqlite3.connect('urls.db')
-    c = conn.cursor()
-    c.execute("SELECT id FROM users WHERE reset_token=? AND reset_token_expiry > ?",
-              (token, datetime.now()))
-    user = c.fetchone()
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    cur.execute("SELECT id FROM users WHERE reset_token = %s AND reset_token_expiry > %s" if is_postgres else "SELECT id FROM users WHERE reset_token = ? AND reset_token_expiry > ?", (token, datetime.now()))
+    user = cur.fetchone()
     if not user:
+        cur.close()
         conn.close()
         return render_error_page("链接无效或已过期", 400)
 
@@ -335,140 +480,196 @@ def reset_password(token):
             return render_error_page("两次密码不一致")
         if len(new_password) < 6:
             return render_error_page("密码至少6位")
-        c.execute("UPDATE users SET password_hash=?, reset_token=NULL, reset_token_expiry=NULL WHERE id=?",
-                  (hash_password(new_password), user[0]))
+        if is_postgres:
+            cur.execute("UPDATE users SET password_hash = %s, reset_token = NULL, reset_token_expiry = NULL WHERE id = %s", (hash_password(new_password), user[0]))
+        else:
+            cur.execute("UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?", (hash_password(new_password), user[0]))
         conn.commit()
+        cur.close()
         conn.close()
         return redirect(url_for('login'))
+    cur.close()
     conn.close()
     return render_template('reset_password.html', token=token)
 
-# ------------------ 新增：用户仪表盘 ------------------
+# ------------------ 仪表盘 ------------------
 @app.route('/dashboard')
 @login_required
 def dashboard():
     user_id = session['user_id']
-    conn = sqlite3.connect('urls.db')
-    c = conn.cursor()
-    # 获取当前用户的所有短链接
-    c.execute("""
-        SELECT short_code, long_url, click_count, created_at, is_custom
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    cur.execute("""
+        SELECT short_code, long_url, click_count, created_at, is_custom, expires_at
         FROM url_mappings
-        WHERE user_id=?
+        WHERE user_id = %s
+        ORDER BY created_at DESC
+    """ if is_postgres else """
+        SELECT short_code, long_url, click_count, created_at, is_custom, expires_at
+        FROM url_mappings
+        WHERE user_id = ?
         ORDER BY created_at DESC
     """, (user_id,))
-    urls = c.fetchall()
+    rows = cur.fetchall()
+    urls = []
+    for row in rows:
+        short_code, long_url, click_count, created_at, is_custom, expires_at = row
+        is_expired = False
+        if expires_at and expires_at < datetime.now():
+            is_expired = True
+        urls.append({
+            'short_code': short_code,
+            'long_url': long_url,
+            'click_count': click_count,
+            'created_at': created_at,
+            'is_custom': is_custom,
+            'expires_at': expires_at,
+            'is_expired': is_expired
+        })
+    cur.close()
     conn.close()
     return render_template('dashboard.html', urls=urls, username=session['username'])
 
-# ------------------ 原有的管理面板（修改：需要登录且为管理员）------------------
+# ------------------ 删除链接 ------------------
+@app.route('/delete/<short_code>', methods=['POST'])
+@login_required
+def delete_link(short_code):
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    cur.execute("SELECT user_id FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT user_id FROM url_mappings WHERE short_code = ?", (short_code,))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return render_error_page("链接不存在", 404)
+    owner_id = row[0]
+    if owner_id != user_id and session.get('username') != 'admin':
+        cur.close()
+        conn.close()
+        return render_error_page("无权删除此链接", 403)
+
+    cur.execute("DELETE FROM url_mappings WHERE short_code = %s" if is_postgres else "DELETE FROM url_mappings WHERE short_code = ?", (short_code,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    # 可选：删除对应的二维码文件
+    try:
+        qrcode_path = os.path.join(app.static_folder, 'qrcodes', f'{short_code}.png')
+        if os.path.exists(qrcode_path):
+            os.remove(qrcode_path)
+    except:
+        pass
+    
+    return redirect(url_for('dashboard'))
+
+# ------------------ 延长有效期 ------------------
+@app.route('/extend/<short_code>', methods=['POST'])
+@login_required
+def extend_link(short_code):
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    cur.execute("SELECT user_id FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT user_id FROM url_mappings WHERE short_code = ?", (short_code,))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return render_error_page("链接不存在", 404)
+    owner_id = row[0]
+    if owner_id != user_id and session.get('username') != 'admin':
+        cur.close()
+        conn.close()
+        return render_error_page("无权操作此链接", 403)
+
+    # 延长30天
+    if is_postgres:
+        cur.execute("UPDATE url_mappings SET expires_at = COALESCE(expires_at, NOW()) + INTERVAL '30 days' WHERE short_code = %s", (short_code,))
+    else:
+        cur.execute("UPDATE url_mappings SET expires_at = datetime(COALESCE(expires_at, CURRENT_TIMESTAMP), '+30 days') WHERE short_code = ?", (short_code,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('dashboard'))
+
+# ------------------ 管理面板 ------------------
 @app.route('/admin')
 @login_required
 def admin_dashboard():
-    # 简单判断：只有用户名为 admin 才可访问
     if session.get('username') != 'admin':
-        abort(403)  # 返回禁止访问
-    conn = sqlite3.connect('urls.db')
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM url_mappings")
-    total_urls = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM url_mappings WHERE is_custom = 1")
-    custom_urls = c.fetchone()[0]
-    c.execute("SELECT SUM(click_count) FROM url_mappings")
-    total_clicks = c.fetchone()[0] or 0
-    c.execute("""
-        SELECT id, short_code, long_url, is_custom, created_at, click_count
+        abort(403)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    cur.execute("SELECT COUNT(*) FROM url_mappings")
+    total_urls = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM url_mappings WHERE is_custom = true")
+    custom_urls = cur.fetchone()[0]
+    cur.execute("SELECT COALESCE(SUM(click_count), 0) FROM url_mappings")
+    total_clicks = cur.fetchone()[0]
+
+    cur.execute("""
+        SELECT id, short_code, long_url, is_custom, created_at, click_count, expires_at
         FROM url_mappings
         ORDER BY created_at DESC
         LIMIT 20
     """)
-    recent_urls = c.fetchall()
+    recent_urls = cur.fetchall()
+
+    cur.execute("SELECT id, username, email, created_at FROM users ORDER BY id")
+    users = cur.fetchall()
+    cur.close()
     conn.close()
 
-    # 渲染管理面板模板（此处为简化，仍用字符串拼接，建议改为独立模板）
-    table_rows = ""
-    for url in recent_urls:
-        url_id, short_code, long_url, is_custom, created_at, clicks = url
-        table_rows += f"""
-        <tr>
-            <td>{url_id}</td>
-            <td><code>{short_code}</code></td>
-            <td>{'✅' if is_custom else '❌'}</td>
-            <td><a href="{long_url}" target="_blank">{long_url[:50]}...</a></td>
-            <td>{created_at}</td>
-            <td>{clicks}</td>
-        </tr>
-        """
-    return f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>管理面板</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>
-            body {{ background: #f8f9fa; padding: 20px; }}
-            .stat-card {{ background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }}
-            .table-container {{ background: white; padding: 20px; border-radius: 10px; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1 class="mb-4">🔧 管理面板</h1>
-            <p>欢迎，{session['username']}！ <a href="/logout">登出</a></p>
-            <div class="row mb-4">
-                <div class="col-md-3">
-                    <div class="stat-card text-center">
-                        <h3>{total_urls}</h3>
-                        <p class="text-muted">总链接数</p>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stat-card text-center">
-                        <h3>{custom_urls}</h3>
-                        <p class="text-muted">自定义链接</p>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stat-card text-center">
-                        <h3>{total_clicks}</h3>
-                        <p class="text-muted">总点击量</p>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stat-card text-center">
-                        <h3><a href="/" target="_blank">🔗</a></h3>
-                        <p class="text-muted">访问前台</p>
-                    </div>
-                </div>
-            </div>
-            <div class="table-container">
-                <h4>最近创建的链接</h4>
-                <table class="table table-striped">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>短码</th>
-                            <th>自定义</th>
-                            <th>原网址</th>
-                            <th>创建时间</th>
-                            <th>点击量</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {table_rows}
-                    </tbody>
-                </table>
-            </div>
-            <div class="mt-3">
-                <a href="/" class="btn btn-primary">返回首页</a>
-                <a href="/admin" class="btn btn-secondary">刷新</a>
-            </div>
-        </div>
-    </body>
-    </html>
-    '''
+    return render_template('admin_dashboard.html',
+                         total_urls=total_urls,
+                         custom_urls=custom_urls,
+                         total_clicks=total_clicks,
+                         recent_urls=recent_urls,
+                         users=users,
+                         username=session['username'])
 
-# ------------------ 原有的错误页面渲染函数（完整）------------------
+# ------------------ 管理员删除用户 ------------------
+@app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
+@login_required
+def admin_delete_user(user_id):
+    if session.get('username') != 'admin':
+        abort(403)
+    if user_id == session['user_id']:
+        return render_error_page("不能删除自己", 400)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+    cur.execute("DELETE FROM users WHERE id = %s" if is_postgres else "DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('admin_dashboard'))
+
+# ------------------ 管理员删除链接 ------------------
+@app.route('/admin/link/<int:link_id>/delete', methods=['POST'])
+@login_required
+def admin_delete_link(link_id):
+    if session.get('username') != 'admin':
+        abort(403)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+    cur.execute("DELETE FROM url_mappings WHERE id = %s" if is_postgres else "DELETE FROM url_mappings WHERE id = ?", (link_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('admin_dashboard'))
+
+# ------------------ 错误页面 ------------------
 def render_error_page(message, status_code=400):
     return f'''
     <!DOCTYPE html>
@@ -476,50 +677,32 @@ def render_error_page(message, status_code=400):
     <head>
         <title>发生错误</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>
-            body {{
-                background: linear-gradient(135deg, #ff6b6b 0%, #c44569 100%);
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-            }}
-            .error-container {{
-                background: white;
-                border-radius: 15px;
-                padding: 40px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-                max-width: 600px;
-                margin: 0 auto;
-            }}
-        </style>
+        <style>body {{ background: linear-gradient(135deg, #ff6b6b 0%, #c44569 100%); min-height: 100vh; display: flex; align-items: center; }} .error-container {{ background: white; border-radius: 15px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-width: 600px; margin: 0 auto; }}</style>
     </head>
     <body>
         <div class="container">
             <div class="error-container">
-                <div class="text-center mb-4">
-                    <h1 style="font-size: 80px; color: #ff6b6b;">❌</h1>
-                    <h2 class="text-danger">发生错误</h2>
-                </div>
-                <div class="alert alert-danger">
-                    <h4 class="alert-heading">错误信息：</h4>
-                    <p class="mb-0">{message}</p>
-                </div>
-                <div class="text-center mt-4">
-                    <a href="/" class="btn btn-primary btn-lg">🏠 返回首页</a>
-                    <button class="btn btn-secondary btn-lg" onclick="history.back()">↩️ 返回上页</button>
-                </div>
-                <div class="mt-4 text-center text-muted small">
-                    <p>如果问题持续存在，请联系系统管理员</p>
-                    <p>错误代码: {status_code}</p>
-                </div>
+                <div class="text-center mb-4"><h1 style="font-size:80px;color:#ff6b6b;">❌</h1><h2 class="text-danger">发生错误</h2></div>
+                <div class="alert alert-danger"><h4 class="alert-heading">错误信息：</h4><p class="mb-0">{message}</p></div>
+                <div class="text-center mt-4"><a href="/" class="btn btn-primary btn-lg">🏠 返回首页</a><button class="btn btn-secondary btn-lg" onclick="history.back()">↩️ 返回上页</button></div>
+                <div class="mt-4 text-center text-muted small"><p>如果问题持续存在，请联系系统管理员</p><p>错误代码: {status_code}</p></div>
             </div>
         </div>
     </body>
     </html>
     ''', status_code
 
-# ------------------ 原有的成功页面渲染函数（完整）------------------
-def render_success_page(long_url, short_url, short_code, is_custom):
+# ------------------ 成功页面 ------------------
+def render_success_page(long_url, short_url, short_code, is_custom, expires_at):
+    # 生成二维码图片 URL（如果存在）
+    qrcode_url = url_for('static', filename=f'qrcodes/{short_code}.png')
+    # 检查二维码文件是否存在（避免显示坏图）
+    qrcode_exists = os.path.exists(os.path.join(app.static_folder, 'qrcodes', f'{short_code}.png'))
+    
+    expiry_text = "永久有效"
+    if expires_at:
+        expiry_text = expires_at.strftime("%Y-%m-%d %H:%M:%S")
+    
     return f'''
     <!DOCTYPE html>
     <html>
@@ -527,77 +710,42 @@ def render_success_page(long_url, short_url, short_code, is_custom):
         <title>缩短成功</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
         <style>
-            body {{
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-            }}
-            .success-container {{
-                background: white;
-                border-radius: 15px;
-                padding: 40px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-                max-width: 700px;
-                margin: 0 auto;
-            }}
-            .url-box {{
-                background: #f8f9fa;
-                border: 2px dashed #dee2e6;
-                border-radius: 10px;
-                padding: 15px;
-                margin: 15px 0;
-                word-break: break-all;
-            }}
-            .custom-badge {{
-                background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-                color: white;
-                padding: 5px 15px;
-                border-radius: 20px;
-                font-size: 0.9em;
-                font-weight: bold;
-            }}
+            body {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; }}
+            .success-container {{ background: white; border-radius: 15px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-width: 700px; margin: 0 auto; }}
+            .url-box {{ background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 10px; padding: 15px; margin: 15px 0; word-break: break-all; }}
+            .custom-badge {{ background: linear-gradient(135deg, #ff6b6b, #ee5a24); color: white; padding: 5px 15px; border-radius: 20px; font-size: 0.9em; font-weight: bold; }}
+            .qrcode {{ max-width: 200px; margin: 20px auto; border: 1px solid #ddd; border-radius: 10px; padding: 10px; background: white; }}
         </style>
     </head>
     <body>
         <div class="container">
             <div class="success-container">
                 <div class="text-center mb-4">
-                    <h1 style="font-size: 80px; color: #28a745;">✅</h1>
-                    <h2 class="text-success">
-                        缩短成功！
-                        {f'<span class="custom-badge ms-2">自定义短码</span>' if is_custom else ''}
-                    </h2>
+                    <h1 style="font-size:80px;color:#28a745;">✅</h1>
+                    <h2 class="text-success">缩短成功！{f'<span class="custom-badge ms-2">自定义短码</span>' if is_custom else ''}</h2>
                 </div>
-                
                 <div class="mb-4">
                     <h5>📎 原始网址：</h5>
-                    <div class="url-box">
-                        <a href="{long_url}" target="_blank">{long_url}</a>
-                    </div>
-                    
+                    <div class="url-box"><a href="{long_url}" target="_blank">{long_url}</a></div>
                     <h5>🔗 短网址：</h5>
-                    <div class="url-box">
-                        <a href="{short_url}" id="short-url" target="_blank" style="font-size: 1.2em; font-weight: bold;">
-                            {short_url}
-                        </a>
-                    </div>
-                    
+                    <div class="url-box"><a href="{short_url}" id="short-url" target="_blank" style="font-size:1.2em;font-weight:bold;">{short_url}</a></div>
                     {f'<div class="alert alert-info mt-3"><strong>🎉 好消息！</strong> 你使用了自定义短码 <code>{short_code}</code>，这个链接更容易记忆和分享！</div>' if is_custom else ''}
                 </div>
                 
-                <div class="text-center mt-4">
-                    <button class="btn btn-success btn-lg px-5" onclick="copyToClipboard()">
-                        📋 复制短网址
-                    </button>
-                    <a href="{short_url}" target="_blank" class="btn btn-primary btn-lg px-5">
-                        🔗 测试访问
-                    </a>
-                    <a href="/" class="btn btn-outline-primary btn-lg px-5">
-                        🏠 返回首页
-                    </a>
+                <!-- 二维码区域 -->
+                <div class="text-center mb-4">
+                    <h5>📱 扫描二维码访问</h5>
+                    {'<img class="qrcode" src="' + qrcode_url + '" alt="QR Code">' if qrcode_exists else '<p class="text-muted">二维码生成失败</p>'}
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadQRCode()">💾 下载二维码</button>
+                    </div>
                 </div>
                 
+                <div class="text-center mt-4">
+                    <button class="btn btn-success btn-lg px-5" onclick="copyToClipboard()">📋 复制短网址</button>
+                    <a href="{short_url}" target="_blank" class="btn btn-primary btn-lg px-5">🔗 测试访问</a>
+                    <a href="/" class="btn btn-outline-primary btn-lg px-5">🏠 返回首页</a>
+                </div>
                 <div class="mt-4 text-center">
                     <div class="btn-group" role="group">
                         <button class="btn btn-outline-secondary btn-sm" onclick="shareOnTwitter()">🐦 Twitter</button>
@@ -605,43 +753,44 @@ def render_success_page(long_url, short_url, short_code, is_custom):
                         <button class="btn btn-outline-secondary btn-sm" onclick="shareOnEmail()">📧 Email</button>
                     </div>
                 </div>
-                
                 <div class="mt-4 alert alert-light">
                     <h6>📊 统计信息：</h6>
                     <p class="mb-1">• 短码：<code>{short_code}</code></p>
                     <p class="mb-1">• 类型：{'自定义' if is_custom else '系统生成'}</p>
-                    <p class="mb-0">• 创建时间：{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+                    <p class="mb-0">• 有效期：{expiry_text}</p>
                 </div>
             </div>
         </div>
-        
         <script>
-            function copyToClipboard() {{
-                navigator.clipboard.writeText("{short_url}");
-                alert('✅ 已复制到剪贴板！');
-            }}
-            
-            function shareOnTwitter() {{
-                const text = `我用自制的URL缩短器创建了一个短链接：{short_url}`;
-                window.open(`https://twitter.com/intent/tweet?text=${{encodeURIComponent(text)}}`, '_blank');
-            }}
-            
-            function shareOnWhatsApp() {{
-                const text = `分享一个短链接：{short_url}`;
-                window.open(`https://wa.me/?text=${{encodeURIComponent(text)}}`, '_blank');
-            }}
-            
-            function shareOnEmail() {{
-                const subject = "分享短链接";
-                const body = `这是我创建的短链接：{short_url}`;
-                window.location.href = `mailto:?subject=${{encodeURIComponent(subject)}}&body=${{encodeURIComponent(body)}}`;
+            function copyToClipboard() {{ navigator.clipboard.writeText("{short_url}"); alert('✅ 已复制到剪贴板！'); }}
+            function shareOnTwitter() {{ const text = `我用自制的URL缩短器创建了一个短链接：{short_url}`; window.open(`https://twitter.com/intent/tweet?text=${{encodeURIComponent(text)}}`, '_blank'); }}
+            function shareOnWhatsApp() {{ const text = `分享一个短链接：{short_url}`; window.open(`https://wa.me/?text=${{encodeURIComponent(text)}}`, '_blank'); }}
+            function shareOnEmail() {{ const subject = "分享短链接"; const body = `这是我创建的短链接：{short_url}`; window.location.href = `mailto:?subject=${{encodeURIComponent(subject)}}&body=${{encodeURIComponent(body)}}`; }}
+            function downloadQRCode() {{
+                var img = document.querySelector('.qrcode');
+                if (img) {{
+                    var link = document.createElement('a');
+                    link.href = img.src;
+                    link.download = 'qrcode_{short_code}.png';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }}
             }}
         </script>
     </body>
     </html>
     '''
 
-# ------------------ 应用启动 ------------------
+print("🚀 正在初始化数据库...")
+init_db()
+print("✅ 数据库初始化调用完成。")
+
+# 创建二维码存储目录（如果不存在）
+qrcode_dir = os.path.join(app.static_folder, 'qrcodes')
+os.makedirs(qrcode_dir, exist_ok=True)
+
+# ------------------ 启动 ------------------
 if __name__ == '__main__':
     init_db()
     print("=" * 60)
@@ -650,10 +799,4 @@ if __name__ == '__main__':
     print(f"📍 首页地址: http://localhost:{port}")
     print(f"🔧 管理面板: http://localhost:{port}/admin (需要用户名admin)")
     print("=" * 60)
-
     app.run(host='0.0.0.0', port=port, debug=False)
-
-
-
-
-

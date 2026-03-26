@@ -53,7 +53,7 @@
                     <div class="table-responsive">
                         <table class="table table-striped">
                             <thead>
-                                也许
+                                32
                                     <th>ID</th>
                                     <th>短码</th>
                                     <th>原网址</th>
@@ -78,6 +78,7 @@
                                         <form action="/admin/link/{{ url[0] }}/delete" method="POST" style="display:inline;">
                                             <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定删除此链接吗？')">删除</button>
                                         </form>
+                                        <a href="/stats/{{ url[1] }}" class="btn btn-sm btn-info">📊 统计</a>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -129,9 +130,7 @@
         document.querySelectorAll('.local-time').forEach(el => {
             let utcStr = el.getAttribute('data-utc');
             if (utcStr) {
-                // 将空格替换为 T，并加上 Z 表示 UTC 时间，然后解析为本地时间
                 let utcDate = new Date(utcStr.replace(' ', 'T') + 'Z');
-                // 转换为本地时间字符串（根据用户浏览器时区自动格式化）
                 let localStr = utcDate.toLocaleString();
                 el.textContent = localStr;
             }

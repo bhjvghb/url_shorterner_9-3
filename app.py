@@ -1,5 +1,4 @@
 from flask import Flask, render_template, request, redirect, url_for, session, abort
-# from flask_babel import Babel, gettext as _  # 已删除，未使用
 import os
 import re
 import string
@@ -109,6 +108,34 @@ def init_db():
                 expires_at TIMESTAMP
             )
         ''')
+
+    # ---------- 创建 clicks 表 ----------
+    if is_postgres:
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS clicks (
+                id SERIAL PRIMARY KEY,
+                short_code VARCHAR(50) NOT NULL,
+                ip_address VARCHAR(45),
+                user_agent TEXT,
+                accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                referer TEXT,
+                FOREIGN KEY (short_code) REFERENCES url_mappings(short_code) ON DELETE CASCADE
+            )
+        ''')
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_clicks_short_code ON clicks (short_code)")
+    else:
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS clicks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                short_code TEXT NOT NULL,
+                ip_address TEXT,
+                user_agent TEXT,
+                accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                referer TEXT,
+                FOREIGN KEY (short_code) REFERENCES url_mappings(short_code) ON DELETE CASCADE
+            )
+        ''')
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_clicks_short_code ON clicks (short_code)")
 
     # ---------- 检查并补充缺失的列 ----------
     def column_exists(table, column):
@@ -340,16 +367,24 @@ def redirect_to_long_url(short_code):
         return render_error_page("该短网址已过期", 410)
 
     cur.execute("UPDATE url_mappings SET click_count = click_count + 1 WHERE id = %s" if is_postgres else "UPDATE url_mappings SET click_count = click_count + 1 WHERE id = ?", (url_id,))
+
+    # 记录点击详情
+    ip_address = request.remote_addr
+    user_agent = request.headers.get('User-Agent', 'Unknown')
+    referer = request.headers.get('Referer', '')  # 来源页面
+
+    if is_postgres:
+        cur.execute("""
+            INSERT INTO clicks (short_code, ip_address, user_agent, referer)
+            VALUES (%s, %s, %s, %s)
+        """, (short_code, ip_address, user_agent, referer))
+    else:
+        cur.execute("""
+            INSERT INTO clicks (short_code, ip_address, user_agent, referer)
+            VALUES (?, ?, ?, ?)
+        """, (short_code, ip_address, user_agent, referer))
+
     conn.commit()
-
-    # 简单日志（可扩展为点击记录表）
-    try:
-        ip_address = request.remote_addr
-        user_agent = request.headers.get('User-Agent', 'Unknown')
-        print(f"📊 访问记录: {short_code} | IP: {ip_address} | UA: {user_agent[:50]}...")
-    except:
-        pass
-
     cur.close()
     conn.close()
     return redirect(long_url)
@@ -553,12 +588,15 @@ def delete_link(short_code):
         conn.close()
         return render_error_page("无权删除此链接", 403)
 
+    # 删除链接
     cur.execute("DELETE FROM url_mappings WHERE short_code = %s" if is_postgres else "DELETE FROM url_mappings WHERE short_code = ?", (short_code,))
+    # 删除相关点击记录（外键级联删除可能已自动处理，但 SQLite 默认不开启外键，手动删除确保兼容）
+    cur.execute("DELETE FROM clicks WHERE short_code = %s" if is_postgres else "DELETE FROM clicks WHERE short_code = ?", (short_code,))
     conn.commit()
     cur.close()
     conn.close()
     
-    # 可选：删除对应的二维码文件
+    # 删除对应的二维码文件
     try:
         qrcode_path = os.path.join(app.static_folder, 'qrcodes', f'{short_code}.png')
         if os.path.exists(qrcode_path):
@@ -663,11 +701,58 @@ def admin_delete_link(link_id):
     conn = get_db_connection()
     cur = conn.cursor()
     is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    # 先获取 short_code 以便删除点击记录
+    cur.execute("SELECT short_code FROM url_mappings WHERE id = %s" if is_postgres else "SELECT short_code FROM url_mappings WHERE id = ?", (link_id,))
+    row = cur.fetchone()
+    if row:
+        short_code = row[0]
+        cur.execute("DELETE FROM clicks WHERE short_code = %s" if is_postgres else "DELETE FROM clicks WHERE short_code = ?", (short_code,))
+
     cur.execute("DELETE FROM url_mappings WHERE id = %s" if is_postgres else "DELETE FROM url_mappings WHERE id = ?", (link_id,))
     conn.commit()
     cur.close()
     conn.close()
     return redirect(url_for('admin_dashboard'))
+
+# ------------------ 链接统计 ------------------
+@app.route('/stats/<short_code>')
+@login_required
+def link_stats(short_code):
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    # 查询短链接信息，验证权限
+    cur.execute("SELECT long_url, user_id FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT long_url, user_id FROM url_mappings WHERE short_code = ?", (short_code,))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return render_error_page("链接不存在", 404)
+
+    long_url, owner_id = row
+    if owner_id != user_id and session.get('username') != 'admin':
+        cur.close()
+        conn.close()
+        return render_error_page("无权查看此链接的统计", 403)
+
+    # 查询点击记录
+    cur.execute("SELECT ip_address, user_agent, accessed_at, referer FROM clicks WHERE short_code = %s ORDER BY accessed_at DESC" if is_postgres else "SELECT ip_address, user_agent, accessed_at, referer FROM clicks WHERE short_code = ? ORDER BY accessed_at DESC", (short_code,))
+    clicks = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    # 转换为字典列表，便于模板使用
+    clicks_list = [{
+        'ip': c[0],
+        'user_agent': c[1],
+        'accessed_at': c[2],
+        'referer': c[3]
+    } for c in clicks]
+
+    return render_template('link_stats.html', short_code=short_code, long_url=long_url, clicks=clicks_list)
 
 # ------------------ 错误页面 ------------------
 def render_error_page(message, status_code=400):
@@ -801,7 +886,4 @@ if __name__ == '__main__':
     print("=" * 60)
     app.run(host='0.0.0.0', port=port, debug=False)
 
-
-
-
-
+    #-----pip install -r requirements.txt

@@ -368,10 +368,13 @@ def redirect_to_long_url(short_code):
 
     cur.execute("UPDATE url_mappings SET click_count = click_count + 1 WHERE id = %s" if is_postgres else "UPDATE url_mappings SET click_count = click_count + 1 WHERE id = ?", (url_id,))
 
-    # 记录点击详情
-    ip_address = request.remote_addr
+# 获取真实客户端 IP
+    ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if ip_address and ',' in ip_address:
+        ip_address = ip_address.split(',')[0].strip()
+
     user_agent = request.headers.get('User-Agent', 'Unknown')
-    referer = request.headers.get('Referer', '')  # 来源页面
+    referer = request.headers.get('Referer', '')
 
     if is_postgres:
         cur.execute("""

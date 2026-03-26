@@ -31,9 +31,6 @@
                             <tr>
                                 <th>Access Time</th>
                                 <th>IP Address</th>
-                                <th>Country</th>
-                                <th>Province/State</th>
-                                <th>City</th>
                                 <th>User Agent</th>
                                 <th>Referer</th>
                             </tr>
@@ -43,9 +40,6 @@
                             <tr>
                                 <td class="local-time" data-utc="{{ click.accessed_at }}">{{ click.accessed_at }}</td>
                                 <td>{{ click.ip }}</td>
-                                <td>{{ click.country if click.country else 'Unknown' }}</td>
-                                <td>{{ click.region if click.region else 'Unknown' }}</td>
-                                <td>{{ click.city if click.city else 'Unknown' }}</td>
                                 <td style="word-break: break-all;">{{ click.user_agent[:100] }}{% if click.user_agent|length > 100 %}...{% endif %}</td>
                                 <td style="word-break: break-all;">{{ click.referer if click.referer else 'Direct Access' }}</td>
                             </tr>

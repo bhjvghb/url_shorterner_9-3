@@ -9,7 +9,6 @@ from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 import qrcode
 from PIL import Image
-import requests   # 新增，用于调用 IP 地理位置 API
 
 # 数据库适配优先使用 PostgreSQL（通过环境变量 DATABASE_URL），否则回退到 SQLite
 import sqlite3
@@ -39,7 +38,7 @@ EXPIRY_OPTIONS = {
 
 # ------------------ 数据库连接工厂 ------------------
 def get_db_connection():
-    """Return a PostgreSQL or SQLite connection based on environment variables"""
+    """根据环境变量返回 PostgreSQL 或 SQLite 连接"""
     database_url = os.environ.get('DATABASE_URL')
     if database_url:
         conn = psycopg2.connect(database_url, cursor_factory=psycopg2.extras.DictCursor)
@@ -48,29 +47,6 @@ def get_db_connection():
         conn = sqlite3.connect('urls.db')
         conn.row_factory = sqlite3.Row
         return conn
-
-# ------------------ IP 地理位置获取 ------------------
-def get_geo_info(ip):
-    """
-    Obtain geographical location information (country, province, city) based on IP address
-    Use free API：http://ip-api.com/json/{ip}?fields=country,regionName,city
-    Return dictionary {'country': str, 'region': str, 'city': str} 或 None
-    """
-    # 私有 IP 或本地回环不查询
-    if ip.startswith(('127.', '192.168.', '10.', '172.16.', '172.17.', '172.18.', '172.19.', '172.20.', '172.21.', '172.22.', '172.23.', '172.24.', '172.25.', '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.', '::1')):
-        return None
-    try:
-        response = requests.get(f'http://ip-api.com/json/{ip}?fields=country,regionName,city', timeout=3)
-        data = response.json()
-        if data.get('status') == 'success':
-            return {
-                'country': data.get('country'),
-                'region': data.get('regionName'),
-                'city': data.get('city')
-            }
-    except Exception as e:
-        print(f"⚠️ IP geolocation query failed ({ip}): {e}")
-    return None
 
 # ------------------ 数据库初始化（PostgreSQL 版） ------------------
 def init_db():
@@ -143,9 +119,6 @@ def init_db():
                 user_agent TEXT,
                 accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 referer TEXT,
-                country VARCHAR(100),
-                region VARCHAR(100),
-                city VARCHAR(100),
                 FOREIGN KEY (short_code) REFERENCES url_mappings(short_code) ON DELETE CASCADE
             )
         ''')
@@ -159,9 +132,6 @@ def init_db():
                 user_agent TEXT,
                 accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 referer TEXT,
-                country TEXT,
-                region TEXT,
-                city TEXT,
                 FOREIGN KEY (short_code) REFERENCES url_mappings(short_code) ON DELETE CASCADE
             )
         ''')
@@ -224,15 +194,6 @@ def init_db():
         else:
             cur.execute("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP")
         print("✅ Add a reset_token_expiry column to users")
-
-    # 为 clicks 表添加地理位置相关列
-    for col in ['country', 'region', 'city']:
-        if not column_exists('clicks', col):
-            if is_postgres:
-                cur.execute(f"ALTER TABLE clicks ADD COLUMN {col} VARCHAR(100)")
-            else:
-                cur.execute(f"ALTER TABLE clicks ADD COLUMN {col} TEXT")
-            print(f"✅ Add {col} column to clicks")
 
     conn.commit()
     cur.close()
@@ -371,12 +332,16 @@ def shorten_url():
     
     # ------------------ 生成二维码 ------------------
     try:
+        # 确保目录存在
         qrcode_dir = os.path.join(app.static_folder, 'qrcodes')
         os.makedirs(qrcode_dir, exist_ok=True)
+        
+        # 生成二维码图片
         img = qrcode.make(short_url)
         img_path = os.path.join(qrcode_dir, f'{short_code}.png')
         img.save(img_path)
     except Exception as e:
+        # 二维码生成失败不影响主要功能，仅打印错误
         print(f"⚠️ QR code generation failed: {e}")
     
     return render_success_page(long_url, short_url, short_code, is_custom, expires_at)
@@ -403,7 +368,7 @@ def redirect_to_long_url(short_code):
 
     cur.execute("UPDATE url_mappings SET click_count = click_count + 1 WHERE id = %s" if is_postgres else "UPDATE url_mappings SET click_count = click_count + 1 WHERE id = ?", (url_id,))
 
-    # 获取真实客户端 IP
+# 获取真实客户端 IP
     ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
     if ip_address and ',' in ip_address:
         ip_address = ip_address.split(',')[0].strip()
@@ -411,23 +376,16 @@ def redirect_to_long_url(short_code):
     user_agent = request.headers.get('User-Agent', 'Unknown')
     referer = request.headers.get('Referer', '')
 
-    # 获取地理位置信息
-    geo = get_geo_info(ip_address)
-    country = geo['country'] if geo else None
-    region = geo['region'] if geo else None
-    city = geo['city'] if geo else None
-
-    # 插入点击记录（包含地理位置）
     if is_postgres:
         cur.execute("""
-            INSERT INTO clicks (short_code, ip_address, user_agent, referer, country, region, city)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (short_code, ip_address, user_agent, referer, country, region, city))
+            INSERT INTO clicks (short_code, ip_address, user_agent, referer)
+            VALUES (%s, %s, %s, %s)
+        """, (short_code, ip_address, user_agent, referer))
     else:
         cur.execute("""
-            INSERT INTO clicks (short_code, ip_address, user_agent, referer, country, region, city)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (short_code, ip_address, user_agent, referer, country, region, city))
+            INSERT INTO clicks (short_code, ip_address, user_agent, referer)
+            VALUES (?, ?, ?, ?)
+        """, (short_code, ip_address, user_agent, referer))
 
     conn.commit()
     cur.close()
@@ -783,18 +741,8 @@ def link_stats(short_code):
         conn.close()
         return render_error_page("You are not the owner of this link", 403)
 
-    # 查询点击记录（包含地理位置）
-    cur.execute("""
-        SELECT ip_address, user_agent, accessed_at, referer, country, region, city
-        FROM clicks
-        WHERE short_code = %s
-        ORDER BY accessed_at DESC
-    """ if is_postgres else """
-        SELECT ip_address, user_agent, accessed_at, referer, country, region, city
-        FROM clicks
-        WHERE short_code = ?
-        ORDER BY accessed_at DESC
-    """, (short_code,))
+    # 查询点击记录
+    cur.execute("SELECT ip_address, user_agent, accessed_at, referer FROM clicks WHERE short_code = %s ORDER BY accessed_at DESC" if is_postgres else "SELECT ip_address, user_agent, accessed_at, referer FROM clicks WHERE short_code = ? ORDER BY accessed_at DESC", (short_code,))
     clicks = cur.fetchall()
     cur.close()
     conn.close()
@@ -804,10 +752,7 @@ def link_stats(short_code):
         'ip': c[0],
         'user_agent': c[1],
         'accessed_at': c[2],
-        'referer': c[3],
-        'country': c[4] if len(c) > 4 else None,
-        'region': c[5] if len(c) > 5 else None,
-        'city': c[6] if len(c) > 6 else None
+        'referer': c[3]
     } for c in clicks]
 
     return render_template('link_stats.html', short_code=short_code, long_url=long_url, clicks=clicks_list)
@@ -837,7 +782,9 @@ def render_error_page(message, status_code=400):
 
 # ------------------ 成功页面 ------------------
 def render_success_page(long_url, short_url, short_code, is_custom, expires_at):
+    # 生成二维码图片 URL（如果存在）
     qrcode_url = url_for('static', filename=f'qrcodes/{short_code}.png')
+    # 检查二维码文件是否存在（避免显示坏图）
     qrcode_exists = os.path.exists(os.path.join(app.static_folder, 'qrcodes', f'{short_code}.png'))
     
     expiry_text = "Permanently Valid"
@@ -873,7 +820,7 @@ def render_success_page(long_url, short_url, short_code, is_custom, expires_at):
                     {f'<div class="alert alert-info mt-3"><strong>🎉 Good News!</strong> You have used a custom short code <code>{short_code}</code>, making this link easier to remember and share!</div>' if is_custom else ''}
                 </div>
                 
-                <!-- QR Code Section-->
+                <!-- 二维码区域 -->
                 <div class="text-center mb-4">
                     <h5>📱 Scan QR Code to Access</h5>
                     {'<img class="qrcode" src="' + qrcode_url + '" alt="QR Code">' if qrcode_exists else '<p class="text-muted">Failed to generate QR code</p>'}
@@ -943,4 +890,3 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=port, debug=False)
 
     #-----pip install -r requirements.txt
-    #-----python app.py

@@ -53,7 +53,7 @@
                     <div class="table-responsive">
                         <table class="table table-striped">
                             <thead>
-                                <tr>
+                                也许
                                     <th>ID</th>
                                     <th>短码</th>
                                     <th>原网址</th>
@@ -71,9 +71,9 @@
                                     <td><code>{{ url[1] }}</code></td>
                                     <td><a href="{{ url[2] }}" target="_blank">{{ url[2][:50] }}...</a></td>
                                     <td>{{ '✅' if url[3] else '❌' }}</td>
-                                    <td>{{ url[4] }}</td>
+                                    <td class="local-time" data-utc="{{ url[4] }}">{{ url[4] }}</td>
                                     <td>{{ url[5] }}</td>
-                                    <td>{{ url[6] if url[6] else '永久' }}</td>
+                                    <td class="local-time" data-utc="{{ url[6] }}">{{ url[6] if url[6] else '永久' }}</td>
                                     <td>
                                         <form action="/admin/link/{{ url[0] }}/delete" method="POST" style="display:inline;">
                                             <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定删除此链接吗？')">删除</button>
@@ -107,7 +107,7 @@
                                     <td>{{ user[0] }}</td>
                                     <td>{{ user[1] }}</td>
                                     <td>{{ user[2] }}</td>
-                                    <td>{{ user[3] }}</td>
+                                    <td class="local-time" data-utc="{{ user[3] }}">{{ user[3] }}</td>
                                     <td>
                                         <form action="/admin/user/{{ user[0] }}/delete" method="POST" style="display:inline;">
                                             <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定删除用户 {{ user[1] }} 及其所有链接吗？')">删除</button>
@@ -124,5 +124,18 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 将后端传来的 UTC 时间字符串（格式：YYYY-MM-DD HH:MM:SS.ffffff）转换为用户本地时间显示
+        document.querySelectorAll('.local-time').forEach(el => {
+            let utcStr = el.getAttribute('data-utc');
+            if (utcStr) {
+                // 将空格替换为 T，并加上 Z 表示 UTC 时间，然后解析为本地时间
+                let utcDate = new Date(utcStr.replace(' ', 'T') + 'Z');
+                // 转换为本地时间字符串（根据用户浏览器时区自动格式化）
+                let localStr = utcDate.toLocaleString();
+                el.textContent = localStr;
+            }
+        });
+    </script>
 </body>
 </html>

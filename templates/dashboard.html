@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的短链接 - URL缩短器</title>
+    <title>My Short Links - URL Shortener</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background: #f8f9fa; padding: 20px; }
@@ -15,27 +15,27 @@
 <body>
     <div class="container">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>👤 {{ username }} 的短链接</h1>
+            <h1>👤 {{ username }}'s Short Links</h1>
             <div>
-                <a href="/" class="btn btn-outline-primary">创建新链接</a>
-                <a href="/logout" class="btn btn-outline-danger">登出</a>
+                <a href="/" class="btn btn-outline-primary">Create New Link</a>
+                <a href="/logout" class="btn btn-outline-danger">Logout</a>
             </div>
         </div>
 
         <div class="dashboard-card">
-            <h4>我的短链接列表</h4>
+            <h4>My Short Links</h4>
             {% if urls %}
                 <div class="table-responsive">
                     <table class="table table-striped table-hover">
                         <thead>
                             <tr>
-                                <th>短码</th>
-                                <th>原网址</th>
-                                <th>点击量</th>
-                                <th>创建时间</th>
-                                <th>过期时间</th>
-                                <th>状态</th>
-                                <th>操作</th>
+                                <th>Short Code</th>
+                                <th>Original URL</th>
+                                <th>Clicks</th>
+                                <th>Created At</th>
+                                <th>Expires At</th>
+                                <th>Status</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -48,25 +48,25 @@
                                 {% if url.expires_at %}
                                     <td class="local-time" data-utc="{{ url.expires_at }}">{{ url.expires_at }}</td>
                                 {% else %}
-                                    <td>永久</td>
+                                    <td>Permanent</td>
                                 {% endif %}
                                 <td>
                                     {% if url.is_expired %}
-                                        <span class="expired">已过期</span>
+                                        <span class="expired">Expired</span>
                                     {% else %}
-                                        <span class="active">有效</span>
+                                        <span class="active">Active</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     <form action="/delete/{{ url.short_code }}" method="POST" style="display:inline;">
-                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定删除此链接吗？')">删除</button>
+                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this link?')">Delete</button>
                                     </form>
                                     {% if url.expires_at %}
                                     <form action="/extend/{{ url.short_code }}" method="POST" style="display:inline;">
-                                        <button type="submit" class="btn btn-sm btn-success">延长30天</button>
+                                        <button type="submit" class="btn btn-sm btn-success">Extend by 30 Days</button>
                                     </form>
                                     {% endif %}
-                                    <a href="/stats/{{ url.short_code }}" class="btn btn-sm btn-info">📊 统计</a>
+                                    <a href="/stats/{{ url.short_code }}" class="btn btn-sm btn-info">📊 Statistics</a>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -74,7 +74,7 @@
                     </table>
                 </div>
             {% else %}
-                <p class="text-muted">你还没有创建任何短链接。 <a href="/">去创建</a></p>
+                <p class="text-muted">You haven't created any short links yet. <a href="/">Create one</a></p>
             {% endif %}
         </div>
     </div>

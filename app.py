@@ -157,28 +157,28 @@ def init_db():
             cur.execute("ALTER TABLE url_mappings ADD COLUMN is_custom BOOLEAN DEFAULT FALSE")
         else:
             cur.execute("ALTER TABLE url_mappings ADD COLUMN is_custom BOOLEAN DEFAULT 0")
-        print("✅ 为 url_mappings 添加 is_custom 列")
+        print("✅ Add an is_custom column to url_mappings")
 
     if not column_exists('url_mappings', 'click_count'):
         if is_postgres:
             cur.execute("ALTER TABLE url_mappings ADD COLUMN click_count INTEGER DEFAULT 0")
         else:
             cur.execute("ALTER TABLE url_mappings ADD COLUMN click_count INTEGER DEFAULT 0")
-        print("✅ 为 url_mappings 添加 click_count 列")
+        print("✅ Add a click_count column to url_mappings")
 
     if not column_exists('url_mappings', 'user_id'):
         if is_postgres:
             cur.execute("ALTER TABLE url_mappings ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL")
         else:
             cur.execute("ALTER TABLE url_mappings ADD COLUMN user_id INTEGER REFERENCES users(id)")
-        print("✅ 为 url_mappings 添加 user_id 列")
+        print("✅ Add a user_id column to url_mappings")
 
     if not column_exists('url_mappings', 'expires_at'):
         if is_postgres:
             cur.execute("ALTER TABLE url_mappings ADD COLUMN expires_at TIMESTAMP")
         else:
             cur.execute("ALTER TABLE url_mappings ADD COLUMN expires_at TIMESTAMP")
-        print("✅ 为 url_mappings 添加 expires_at 列")
+        print("✅ Add an expires_at column to url_mappings")
 
     # 为 users 表添加可能缺失的列
     if not column_exists('users', 'reset_token'):
@@ -186,19 +186,19 @@ def init_db():
             cur.execute("ALTER TABLE users ADD COLUMN reset_token VARCHAR(36)")
         else:
             cur.execute("ALTER TABLE users ADD COLUMN reset_token TEXT")
-        print("✅ 为 users 添加 reset_token 列")
+        print("✅ Add a reset_token column to users")
 
     if not column_exists('users', 'reset_token_expiry'):
         if is_postgres:
             cur.execute("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP")
         else:
             cur.execute("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP")
-        print("✅ 为 users 添加 reset_token_expiry 列")
+        print("✅ Add a reset_token_expiry column to users")
 
     conn.commit()
     cur.close()
     conn.close()
-    print("✅ 数据库初始化/升级完成")
+    print("✅ Database initialization/upgrade completed")
 
 # ------------------ 密码辅助函数 ------------------
 def hash_password(password):
@@ -223,16 +223,16 @@ def generate_short_code(length=6):
 
 def validate_custom_code(code):
     if len(code) < 3 or len(code) > 20:
-        return False, "长度必须在3-20个字符之间"
+        return False, "The length must be between 3 and 20 characters."
     if not re.match(r'^[a-zA-Z0-9_-]+$', code):
-        return False, "只能包含字母、数字、下划线(_)和连字符(-)"
+        return False, "The code can only contain letters, numbers, underscores (_), and hyphens (-)."
     if code.startswith('-') or code.endswith('-'):
-        return False, "不能以连字符开头或结尾"
+        return False, "The code cannot start or end with a hyphen."
     if '--' in code:
-        return False, "不能包含连续连字符"
+        return False, "The code cannot contain consecutive hyphens."
     if code.lower() in RESERVED_WORDS:
-        return False, f"'{code}' 是系统保留字"
-    return True, "验证通过"
+        return False, f"'{code}' is a reserved word."
+    return True, "Validation passed"
 
 # ------------------ 首页 ------------------
 @app.route('/')
@@ -263,7 +263,7 @@ def shorten_url():
     expiry_choice = request.form.get('expiry', 'forever')
 
     if not long_url:
-        return render_error_page("请输入要缩短的URL网址")
+        return render_error_page("Please enter the URL to shorten")
     if not long_url.startswith(('http://', 'https://')):
         long_url = 'https://' + long_url
 
@@ -276,12 +276,12 @@ def shorten_url():
         if not is_valid:
             cur.close()
             conn.close()
-            return render_error_page(f"自定义短码错误: {error_msg}")
+            return render_error_page(f"Custom short code error: {error_msg}")
         cur.execute("SELECT * FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT * FROM url_mappings WHERE short_code = ?", (custom_code,))
         if cur.fetchone():
             cur.close()
             conn.close()
-            return render_error_page(f"短码 '{custom_code}' 已被使用，请换一个")
+            return render_error_page(f"Short code '{custom_code}' is already in use. Please choose another.")
         short_code = custom_code
         is_custom = True
     else:
@@ -295,7 +295,7 @@ def shorten_url():
         else:
             cur.close()
             conn.close()
-            return render_error_page("生成短码失败，请重试")
+            return render_error_page("Failed to generate short code. Please try again.")
         is_custom = False
 
     user_id = session.get('user_id')
@@ -324,7 +324,7 @@ def shorten_url():
     except Exception as e:
         cur.close()
         conn.close()
-        return render_error_page(f"数据库错误: {str(e)}")
+        return render_error_page(f"Database error: {str(e)}")
 
     cur.close()
     conn.close()
@@ -342,7 +342,7 @@ def shorten_url():
         img.save(img_path)
     except Exception as e:
         # 二维码生成失败不影响主要功能，仅打印错误
-        print(f"⚠️ 二维码生成失败: {e}")
+        print(f"⚠️ QR code generation failed: {e}")
     
     return render_success_page(long_url, short_url, short_code, is_custom, expires_at)
 
@@ -358,13 +358,13 @@ def redirect_to_long_url(short_code):
     if not result:
         cur.close()
         conn.close()
-        return render_error_page("短网址不存在或已过期", 404)
+        return render_error_page("The short URL does not exist or has expired", 404)
 
     url_id, long_url, expires_at = result
     if expires_at and expires_at < datetime.now():
         cur.close()
         conn.close()
-        return render_error_page("该短网址已过期", 410)
+        return render_error_page("The short URL has expired", 410)
 
     cur.execute("UPDATE url_mappings SET click_count = click_count + 1 WHERE id = %s" if is_postgres else "UPDATE url_mappings SET click_count = click_count + 1 WHERE id = ?", (url_id,))
 
@@ -402,11 +402,11 @@ def register():
         confirm = request.form['confirm_password']
 
         if not username or not email or not password:
-            return render_error_page("所有字段均为必填")
+            return render_error_page("All fields are required")
         if password != confirm:
-            return render_error_page("两次输入的密码不一致")
+            return render_error_page("The passwords do not match")
         if len(password) < 6:
-            return render_error_page("密码至少6位")
+            return render_error_page("The password must be at least 6 characters long")
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -428,10 +428,10 @@ def register():
             conn.rollback()
             if 'duplicate key' in str(e).lower() or 'unique constraint' in str(e).lower():
                 if 'username' in str(e).lower():
-                    return render_error_page("用户名已存在")
+                    return render_error_page("Username already exists")
                 elif 'email' in str(e).lower():
-                    return render_error_page("邮箱已被注册")
-            return render_error_page(f"注册失败: {str(e)}")
+                    return render_error_page("Email is already registered")
+            return render_error_page(f"Registration failed: {str(e)}")
         finally:
             cur.close()
             conn.close()
@@ -459,7 +459,7 @@ def login():
             session['username'] = user[1]
             return redirect(url_for('index'))
         else:
-            return render_error_page("用户名/邮箱或密码错误")
+            return render_error_page("Invalid username/email or password")
     return render_template('login.html')
 
 # ------------------ 登出 ------------------
@@ -488,13 +488,13 @@ def forgot_password():
                 cur.execute("UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?", (token, expiry, user[0]))
             conn.commit()
             reset_link = url_for('reset_password', token=token, _external=True)
-            print(f"密码重置链接: {reset_link}")
+            print(f"Password reset link: {reset_link}")
             cur.close()
             conn.close()
-            return f"重置链接已生成：<a href='{reset_link}'>{reset_link}</a>"
+            return f"Reset link generated: <a href='{reset_link}'>{reset_link}</a>"
         cur.close()
         conn.close()
-        return "如果邮箱存在，重置链接已发送，请查收。"
+        return "If the email exists, a reset link has been sent. Please check your inbox."
     return render_template('forgot_password.html')
 
 # ------------------ 重置密码 ------------------
@@ -509,15 +509,15 @@ def reset_password(token):
     if not user:
         cur.close()
         conn.close()
-        return render_error_page("链接无效或已过期", 400)
+        return render_error_page("The link is invalid or has expired.", 400)
 
     if request.method == 'POST':
         new_password = request.form['password']
         confirm = request.form['confirm_password']
         if new_password != confirm:
-            return render_error_page("两次密码不一致")
+            return render_error_page("The passwords do not match")
         if len(new_password) < 6:
-            return render_error_page("密码至少6位")
+            return render_error_page("The password must be at least 6 characters long")
         if is_postgres:
             cur.execute("UPDATE users SET password_hash = %s, reset_token = NULL, reset_token_expiry = NULL WHERE id = %s", (hash_password(new_password), user[0]))
         else:
@@ -584,12 +584,12 @@ def delete_link(short_code):
     if not row:
         cur.close()
         conn.close()
-        return render_error_page("链接不存在", 404)
+        return render_error_page("The link does not exist", 404)
     owner_id = row[0]
     if owner_id != user_id and session.get('username') != 'admin':
         cur.close()
         conn.close()
-        return render_error_page("无权删除此链接", 403)
+        return render_error_page("You are not the owner of this link", 403)
 
     # 删除链接
     cur.execute("DELETE FROM url_mappings WHERE short_code = %s" if is_postgres else "DELETE FROM url_mappings WHERE short_code = ?", (short_code,))
@@ -623,12 +623,12 @@ def extend_link(short_code):
     if not row:
         cur.close()
         conn.close()
-        return render_error_page("链接不存在", 404)
+        return render_error_page("The link does not exist", 404)
     owner_id = row[0]
     if owner_id != user_id and session.get('username') != 'admin':
         cur.close()
         conn.close()
-        return render_error_page("无权操作此链接", 403)
+        return render_error_page("You are not the owner of this link", 403)
 
     # 延长30天
     if is_postgres:
@@ -685,7 +685,7 @@ def admin_delete_user(user_id):
     if session.get('username') != 'admin':
         abort(403)
     if user_id == session['user_id']:
-        return render_error_page("不能删除自己", 400)
+        return render_error_page("You cannot delete yourself", 400)
     conn = get_db_connection()
     cur = conn.cursor()
     is_postgres = os.environ.get('DATABASE_URL') is not None
@@ -733,13 +733,13 @@ def link_stats(short_code):
     if not row:
         cur.close()
         conn.close()
-        return render_error_page("链接不存在", 404)
+        return render_error_page("The link does not exist", 404)
 
     long_url, owner_id = row
     if owner_id != user_id and session.get('username') != 'admin':
         cur.close()
         conn.close()
-        return render_error_page("无权查看此链接的统计", 403)
+        return render_error_page("You are not the owner of this link", 403)
 
     # 查询点击记录
     cur.execute("SELECT ip_address, user_agent, accessed_at, referer FROM clicks WHERE short_code = %s ORDER BY accessed_at DESC" if is_postgres else "SELECT ip_address, user_agent, accessed_at, referer FROM clicks WHERE short_code = ? ORDER BY accessed_at DESC", (short_code,))
@@ -763,17 +763,17 @@ def render_error_page(message, status_code=400):
     <!DOCTYPE html>
     <html>
     <head>
-        <title>发生错误</title>
+        <title>An error occurred</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
         <style>body {{ background: linear-gradient(135deg, #ff6b6b 0%, #c44569 100%); min-height: 100vh; display: flex; align-items: center; }} .error-container {{ background: white; border-radius: 15px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-width: 600px; margin: 0 auto; }}</style>
     </head>
     <body>
         <div class="container">
             <div class="error-container">
-                <div class="text-center mb-4"><h1 style="font-size:80px;color:#ff6b6b;">❌</h1><h2 class="text-danger">发生错误</h2></div>
-                <div class="alert alert-danger"><h4 class="alert-heading">错误信息：</h4><p class="mb-0">{message}</p></div>
-                <div class="text-center mt-4"><a href="/" class="btn btn-primary btn-lg">🏠 返回首页</a><button class="btn btn-secondary btn-lg" onclick="history.back()">↩️ 返回上页</button></div>
-                <div class="mt-4 text-center text-muted small"><p>如果问题持续存在，请联系系统管理员</p><p>错误代码: {status_code}</p></div>
+                <div class="text-center mb-4"><h1 style="font-size:80px;color:#ff6b6b;">❌</h1><h2 class="text-danger">An error occurred</h2></div>
+                <div class="alert alert-danger"><h4 class="alert-heading">Error Message:</h4><p class="mb-0">{message}</p></div>
+                <div class="text-center mt-4"><a href="/" class="btn btn-primary btn-lg">🏠 Return to Home</a><button class="btn btn-secondary btn-lg" onclick="history.back()">↩️ Return to Previous Page</button></div>
+                <div class="mt-4 text-center text-muted small"><p>If the problem persists, please contact the system administrator</p><p>Error Code: {status_code}</p></div>
             </div>
         </div>
     </body>
@@ -787,7 +787,7 @@ def render_success_page(long_url, short_url, short_code, is_custom, expires_at):
     # 检查二维码文件是否存在（避免显示坏图）
     qrcode_exists = os.path.exists(os.path.join(app.static_folder, 'qrcodes', f'{short_code}.png'))
     
-    expiry_text = "永久有效"
+    expiry_text = "Permanently Valid"
     if expires_at:
         expiry_text = expires_at.strftime("%Y-%m-%d %H:%M:%S")
     
@@ -795,7 +795,7 @@ def render_success_page(long_url, short_url, short_code, is_custom, expires_at):
     <!DOCTYPE html>
     <html>
     <head>
-        <title>缩短成功</title>
+        <title> shortened successfully</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
         <style>
             body {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; }}
@@ -810,29 +810,29 @@ def render_success_page(long_url, short_url, short_code, is_custom, expires_at):
             <div class="success-container">
                 <div class="text-center mb-4">
                     <h1 style="font-size:80px;color:#28a745;">✅</h1>
-                    <h2 class="text-success">缩短成功！{f'<span class="custom-badge ms-2">自定义短码</span>' if is_custom else ''}</h2>
+                    <h2 class="text-success"> shortened successfully!{f'<span class="custom-badge ms-2">Custom Short Code</span>' if is_custom else ''}</h2>
                 </div>
                 <div class="mb-4">
-                    <h5>📎 原始网址：</h5>
+                    <h5>📎 Original URL:</h5>
                     <div class="url-box"><a href="{long_url}" target="_blank">{long_url}</a></div>
-                    <h5>🔗 短网址：</h5>
+                    <h5>🔗 Short URL:</h5>
                     <div class="url-box"><a href="{short_url}" id="short-url" target="_blank" style="font-size:1.2em;font-weight:bold;">{short_url}</a></div>
-                    {f'<div class="alert alert-info mt-3"><strong>🎉 好消息！</strong> 你使用了自定义短码 <code>{short_code}</code>，这个链接更容易记忆和分享！</div>' if is_custom else ''}
+                    {f'<div class="alert alert-info mt-3"><strong>🎉 Good News!</strong> You have used a custom short code <code>{short_code}</code>, making this link easier to remember and share!</div>' if is_custom else ''}
                 </div>
                 
                 <!-- 二维码区域 -->
                 <div class="text-center mb-4">
-                    <h5>📱 扫描二维码访问</h5>
-                    {'<img class="qrcode" src="' + qrcode_url + '" alt="QR Code">' if qrcode_exists else '<p class="text-muted">二维码生成失败</p>'}
+                    <h5>📱 Scan QR Code to Access</h5>
+                    {'<img class="qrcode" src="' + qrcode_url + '" alt="QR Code">' if qrcode_exists else '<p class="text-muted">Failed to generate QR code</p>'}
                     <div class="mt-2">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadQRCode()">💾 下载二维码</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadQRCode()">💾 Download QR Code</button>
                     </div>
                 </div>
                 
                 <div class="text-center mt-4">
-                    <button class="btn btn-success btn-lg px-5" onclick="copyToClipboard()">📋 复制短网址</button>
-                    <a href="{short_url}" target="_blank" class="btn btn-primary btn-lg px-5">🔗 测试访问</a>
-                    <a href="/" class="btn btn-outline-primary btn-lg px-5">🏠 返回首页</a>
+                    <button class="btn btn-success btn-lg px-5" onclick="copyToClipboard()">📋 Copy Short URL</button>
+                    <a href="{short_url}" target="_blank" class="btn btn-primary btn-lg px-5">🔗 Test Access</a>
+                    <a href="/" class="btn btn-outline-primary btn-lg px-5">🏠 Return to Home</a>
                 </div>
                 <div class="mt-4 text-center">
                     <div class="btn-group" role="group">
@@ -842,18 +842,18 @@ def render_success_page(long_url, short_url, short_code, is_custom, expires_at):
                     </div>
                 </div>
                 <div class="mt-4 alert alert-light">
-                    <h6>📊 统计信息：</h6>
-                    <p class="mb-1">• 短码：<code>{short_code}</code></p>
-                    <p class="mb-1">• 类型：{'自定义' if is_custom else '系统生成'}</p>
-                    <p class="mb-0">• 有效期：{expiry_text}</p>
+                    <h6>📊 Statistics:</h6>
+                    <p class="mb-1">• Short Code: <code>{short_code}</code></p>
+                    <p class="mb-1">• Type: {'Custom' if is_custom else 'System Generated'}</p>
+                    <p class="mb-0">• Expiry: {expiry_text}</p>
                 </div>
             </div>
         </div>
         <script>
-            function copyToClipboard() {{ navigator.clipboard.writeText("{short_url}"); alert('✅ 已复制到剪贴板！'); }}
-            function shareOnTwitter() {{ const text = `我用自制的URL缩短器创建了一个短链接：{short_url}`; window.open(`https://twitter.com/intent/tweet?text=${{encodeURIComponent(text)}}`, '_blank'); }}
-            function shareOnWhatsApp() {{ const text = `分享一个短链接：{short_url}`; window.open(`https://wa.me/?text=${{encodeURIComponent(text)}}`, '_blank'); }}
-            function shareOnEmail() {{ const subject = "分享短链接"; const body = `这是我创建的短链接：{short_url}`; window.location.href = `mailto:?subject=${{encodeURIComponent(subject)}}&body=${{encodeURIComponent(body)}}`; }}
+            function copyToClipboard() {{ navigator.clipboard.writeText("{short_url}"); alert('✅ Copied to clipboard!'); }}
+            function shareOnTwitter() {{ const text = `I used my custom URL shortener to create a short link: {short_url}`; window.open(`https://twitter.com/intent/tweet?text=${{encodeURIComponent(text)}}`, '_blank'); }}
+            function shareOnWhatsApp() {{ const text = `Share a short link: {short_url}`; window.open(`https://wa.me/?text=${{encodeURIComponent(text)}}`, '_blank'); }}
+            function shareOnEmail() {{ const subject = "Share a short link"; const body = `Here's the short link I created: {short_url}`; window.location.href = `mailto:?subject=${{encodeURIComponent(subject)}}&body=${{encodeURIComponent(body)}}`; }}
             function downloadQRCode() {{
                 var img = document.querySelector('.qrcode');
                 if (img) {{
@@ -870,9 +870,9 @@ def render_success_page(long_url, short_url, short_code, is_custom, expires_at):
     </html>
     '''
 
-print("🚀 正在初始化数据库...")
+print("🚀 Initializing the database...")
 init_db()
-print("✅ 数据库初始化调用完成。")
+print("✅ Database initialization completed.")
 
 # 创建二维码存储目录（如果不存在）
 qrcode_dir = os.path.join(app.static_folder, 'qrcodes')
@@ -882,10 +882,10 @@ os.makedirs(qrcode_dir, exist_ok=True)
 if __name__ == '__main__':
     init_db()
     print("=" * 60)
-    print("🚀 URL缩短器启动成功！")
+    print("🚀 URL Shortener started successfully!")
     print("=" * 60)
-    print(f"📍 首页地址: http://localhost:{port}")
-    print(f"🔧 管理面板: http://localhost:{port}/admin (需要用户名admin)")
+    print(f"📍 Home URL: http://localhost:{port}")
+    print(f"🔧 Admin Panel: http://localhost:{port}/admin (Username: admin)")
     print("=" * 60)
     app.run(host='0.0.0.0', port=port, debug=False)
 

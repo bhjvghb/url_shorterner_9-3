@@ -889,4 +889,5 @@ if __name__ == '__main__':
     print("=" * 60)
     app.run(host='0.0.0.0', port=port, debug=False)
 
-    #-----pip install -r requirements.txt
+    #pip install -r requirements.txt
+    #python app.py

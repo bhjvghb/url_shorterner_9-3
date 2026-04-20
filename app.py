@@ -557,14 +557,23 @@ def dashboard():
         is_expired = False
         if expires_at and expires_at < datetime.now():
             is_expired = True
+        
+        # 构造完整短链接
+        short_url = f"{request.host_url}{short_code}"
+        # 检查二维码文件是否存在
+        qrcode_path = os.path.join(app.static_folder, 'qrcodes', f'{short_code}.png')
+        qrcode_exists = os.path.exists(qrcode_path)
+        
         urls.append({
             'short_code': short_code,
             'long_url': long_url,
+            'short_url': short_url,
             'click_count': click_count,
             'created_at': created_at,
             'is_custom': is_custom,
             'expires_at': expires_at,
-            'is_expired': is_expired
+            'is_expired': is_expired,
+            'qrcode_exists': qrcode_exists
         })
     cur.close()
     conn.close()

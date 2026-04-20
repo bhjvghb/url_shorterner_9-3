@@ -15,8 +15,13 @@ import sqlite3
 import psycopg2
 import psycopg2.extras
 
+from i18n import init_i18n, _, flash_msg
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# ===== 初始化三语国际化系统 =====
+init_i18n(app)
 
 # 获取环境变量中的端口（Render 会自动设置）
 port = int(os.environ.get("PORT", 5000))
@@ -223,16 +228,16 @@ def generate_short_code(length=6):
 
 def validate_custom_code(code):
     if len(code) < 3 or len(code) > 20:
-        return False, "The length must be between 3 and 20 characters."
+        return False, 'code_length_invalid'
     if not re.match(r'^[a-zA-Z0-9_-]+$', code):
-        return False, "The code can only contain letters, numbers, underscores (_), and hyphens (-)."
+        return False, 'code_chars_invalid'
     if code.startswith('-') or code.endswith('-'):
-        return False, "The code cannot start or end with a hyphen."
+        return False, 'code_hyphen_invalid'
     if '--' in code:
-        return False, "The code cannot contain consecutive hyphens."
+        return False, 'code_consecutive_hyphens'
     if code.lower() in RESERVED_WORDS:
-        return False, f"'{code}' is a reserved word."
-    return True, "Validation passed"
+        return False, 'code_reserved'
+    return True, 'ok'
 
 # ------------------ 首页 ------------------
 @app.route('/')
@@ -263,7 +268,7 @@ def shorten_url():
     expiry_choice = request.form.get('expiry', 'forever')
 
     if not long_url:
-        return render_error_page("Please enter the URL to shorten")
+        return render_error_page(key='url_required')
     if not long_url.startswith(('http://', 'https://')):
         long_url = 'https://' + long_url
 
@@ -272,16 +277,16 @@ def shorten_url():
     is_postgres = os.environ.get('DATABASE_URL') is not None
 
     if custom_code:
-        is_valid, error_msg = validate_custom_code(custom_code)
+        is_valid, error_key = validate_custom_code(custom_code)
         if not is_valid:
             cur.close()
             conn.close()
-            return render_error_page(f"Custom short code error: {error_msg}")
+            return render_error_page(key=error_key, code=custom_code)
         cur.execute("SELECT * FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT * FROM url_mappings WHERE short_code = ?", (custom_code,))
         if cur.fetchone():
             cur.close()
             conn.close()
-            return render_error_page(f"Short code '{custom_code}' is already in use. Please choose another.")
+            return render_error_page(key='code_in_use', code=custom_code)
         short_code = custom_code
         is_custom = True
     else:
@@ -295,7 +300,7 @@ def shorten_url():
         else:
             cur.close()
             conn.close()
-            return render_error_page("Failed to generate short code. Please try again.")
+            return render_error_page(key='gen_failed')
         is_custom = False
 
     user_id = session.get('user_id')
@@ -324,7 +329,7 @@ def shorten_url():
     except Exception as e:
         cur.close()
         conn.close()
-        return render_error_page(f"Database error: {str(e)}")
+        return render_error_page(key='db_error', error=str(e))
 
     cur.close()
     conn.close()
@@ -358,13 +363,13 @@ def redirect_to_long_url(short_code):
     if not result:
         cur.close()
         conn.close()
-        return render_error_page("The short URL does not exist or has expired", 404)
+        return render_error_page(key='url_not_found', status_code=404)
 
     url_id, long_url, expires_at = result
     if expires_at and expires_at < datetime.now():
         cur.close()
         conn.close()
-        return render_error_page("The short URL has expired", 410)
+        return render_error_page(key='url_expired', status_code=410)
 
     cur.execute("UPDATE url_mappings SET click_count = click_count + 1 WHERE id = %s" if is_postgres else "UPDATE url_mappings SET click_count = click_count + 1 WHERE id = ?", (url_id,))
 
@@ -402,11 +407,11 @@ def register():
         confirm = request.form['confirm_password']
 
         if not username or not email or not password:
-            return render_error_page("All fields are required")
+            return render_error_page(key='all_fields_required')
         if password != confirm:
-            return render_error_page("The passwords do not match")
+            return render_error_page(key='passwords_not_match')
         if len(password) < 6:
-            return render_error_page("The password must be at least 6 characters long")
+            return render_error_page(key='password_too_short')
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -428,10 +433,10 @@ def register():
             conn.rollback()
             if 'duplicate key' in str(e).lower() or 'unique constraint' in str(e).lower():
                 if 'username' in str(e).lower():
-                    return render_error_page("Username already exists")
+                    return render_error_page(key='username_exists')
                 elif 'email' in str(e).lower():
-                    return render_error_page("Email is already registered")
-            return render_error_page(f"Registration failed: {str(e)}")
+                    return render_error_page(key='email_exists')
+            return render_error_page(key='registration_failed', error=str(e))
         finally:
             cur.close()
             conn.close()
@@ -459,7 +464,7 @@ def login():
             session['username'] = user[1]
             return redirect(url_for('index'))
         else:
-            return render_error_page("Invalid username/email or password")
+            return render_error_page(key='invalid_credentials')
     return render_template('login.html')
 
 # ------------------ 登出 ------------------
@@ -491,10 +496,10 @@ def forgot_password():
             print(f"Password reset link: {reset_link}")
             cur.close()
             conn.close()
-            return f"Reset link generated: <a href='{reset_link}'>{reset_link}</a>"
+            return f"<p>{_('reset_link_generated')}</p><p><a href='{reset_link}'>{reset_link}</a></p>"
         cur.close()
         conn.close()
-        return "If the email exists, a reset link has been sent. Please check your inbox."
+        return '<p>' + _('reset_link_sent') + '</p>'
     return render_template('forgot_password.html')
 
 # ------------------ 重置密码 ------------------
@@ -509,15 +514,15 @@ def reset_password(token):
     if not user:
         cur.close()
         conn.close()
-        return render_error_page("The link is invalid or has expired.", 400)
+        return render_error_page(key='token_invalid', status_code=400)
 
     if request.method == 'POST':
         new_password = request.form['password']
         confirm = request.form['confirm_password']
         if new_password != confirm:
-            return render_error_page("The passwords do not match")
+            return render_error_page(key='passwords_not_match')
         if len(new_password) < 6:
-            return render_error_page("The password must be at least 6 characters long")
+            return render_error_page(key='password_too_short')
         if is_postgres:
             cur.execute("UPDATE users SET password_hash = %s, reset_token = NULL, reset_token_expiry = NULL WHERE id = %s", (hash_password(new_password), user[0]))
         else:
@@ -557,14 +562,23 @@ def dashboard():
         is_expired = False
         if expires_at and expires_at < datetime.now():
             is_expired = True
+        
+        # 构造完整短链接
+        short_url = f"{request.host_url}{short_code}"
+        # 检查二维码文件是否存在
+        qrcode_path = os.path.join(app.static_folder, 'qrcodes', f'{short_code}.png')
+        qrcode_exists = os.path.exists(qrcode_path)
+        
         urls.append({
             'short_code': short_code,
             'long_url': long_url,
+            'short_url': short_url,
             'click_count': click_count,
             'created_at': created_at,
             'is_custom': is_custom,
             'expires_at': expires_at,
-            'is_expired': is_expired
+            'is_expired': is_expired,
+            'qrcode_exists': qrcode_exists
         })
     cur.close()
     conn.close()
@@ -584,12 +598,12 @@ def delete_link(short_code):
     if not row:
         cur.close()
         conn.close()
-        return render_error_page("The link does not exist", 404)
+        return render_error_page(key='link_not_found', status_code=404)
     owner_id = row[0]
     if owner_id != user_id and session.get('username') != 'admin':
         cur.close()
         conn.close()
-        return render_error_page("You are not the owner of this link", 403)
+        return render_error_page(key='not_owner', status_code=403)
 
     # 删除链接
     cur.execute("DELETE FROM url_mappings WHERE short_code = %s" if is_postgres else "DELETE FROM url_mappings WHERE short_code = ?", (short_code,))
@@ -623,12 +637,12 @@ def extend_link(short_code):
     if not row:
         cur.close()
         conn.close()
-        return render_error_page("The link does not exist", 404)
+        return render_error_page(key='link_not_found', status_code=404)
     owner_id = row[0]
     if owner_id != user_id and session.get('username') != 'admin':
         cur.close()
         conn.close()
-        return render_error_page("You are not the owner of this link", 403)
+        return render_error_page(key='not_owner', status_code=403)
 
     # 延长30天
     if is_postgres:
@@ -685,7 +699,7 @@ def admin_delete_user(user_id):
     if session.get('username') != 'admin':
         abort(403)
     if user_id == session['user_id']:
-        return render_error_page("You cannot delete yourself", 400)
+        return render_error_page(key='cannot_delete_self', status_code=400)
     conn = get_db_connection()
     cur = conn.cursor()
     is_postgres = os.environ.get('DATABASE_URL') is not None
@@ -733,13 +747,13 @@ def link_stats(short_code):
     if not row:
         cur.close()
         conn.close()
-        return render_error_page("The link does not exist", 404)
+        return render_error_page(key='link_not_found', status_code=404)
 
     long_url, owner_id = row
     if owner_id != user_id and session.get('username') != 'admin':
         cur.close()
         conn.close()
-        return render_error_page("You are not the owner of this link", 403)
+        return render_error_page(key='not_owner', status_code=403)
 
     # 查询点击记录
     cur.execute("SELECT ip_address, user_agent, accessed_at, referer FROM clicks WHERE short_code = %s ORDER BY accessed_at DESC" if is_postgres else "SELECT ip_address, user_agent, accessed_at, referer FROM clicks WHERE short_code = ? ORDER BY accessed_at DESC", (short_code,))
@@ -757,118 +771,40 @@ def link_stats(short_code):
 
     return render_template('link_stats.html', short_code=short_code, long_url=long_url, clicks=clicks_list)
 
-# ------------------ 错误页面 ------------------
-def render_error_page(message, status_code=400):
-    return f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>An error occurred</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>body {{ background: linear-gradient(135deg, #ff6b6b 0%, #c44569 100%); min-height: 100vh; display: flex; align-items: center; }} .error-container {{ background: white; border-radius: 15px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-width: 600px; margin: 0 auto; }}</style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="error-container">
-                <div class="text-center mb-4"><h1 style="font-size:80px;color:#ff6b6b;">❌</h1><h2 class="text-danger">An error occurred</h2></div>
-                <div class="alert alert-danger"><h4 class="alert-heading">Error Message:</h4><p class="mb-0">{message}</p></div>
-                <div class="text-center mt-4"><a href="/" class="btn btn-primary btn-lg">🏠 Return to Home</a><button class="btn btn-secondary btn-lg" onclick="history.back()">↩️ Return to Previous Page</button></div>
-                <div class="mt-4 text-center text-muted small"><p>If the problem persists, please contact the system administrator</p><p>Error Code: {status_code}</p></div>
-            </div>
-        </div>
-    </body>
-    </html>
-    ''', status_code
+# ------------------ 错误页面 (三语) ------------------
+def render_error_page(message=None, key=None, status_code=400, **kwargs):
+    """
+    渲染三语错误页面。
+    - key: 翻译键，如 'url_required'
+    - message: 原始英文消息（当 key 未提供时使用）
+    优先使用 key 进行翻译。
+    """
+    if key:
+        msg = _(key, **kwargs)
+    elif message:
+        msg = message
+    else:
+        msg = _('url_not_found')
+    return render_template('error.html', message=msg, status_code=status_code), status_code
 
-# ------------------ 成功页面 ------------------
+# ------------------ 成功页面 (三语) ------------------
 def render_success_page(long_url, short_url, short_code, is_custom, expires_at):
-    # 生成二维码图片 URL（如果存在）
     qrcode_url = url_for('static', filename=f'qrcodes/{short_code}.png')
-    # 检查二维码文件是否存在（避免显示坏图）
     qrcode_exists = os.path.exists(os.path.join(app.static_folder, 'qrcodes', f'{short_code}.png'))
-    
-    expiry_text = "Permanently Valid"
+
     if expires_at:
         expiry_text = expires_at.strftime("%Y-%m-%d %H:%M:%S")
-    
-    return f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title> shortened successfully</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        <style>
-            body {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; }}
-            .success-container {{ background: white; border-radius: 15px; padding: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-width: 700px; margin: 0 auto; }}
-            .url-box {{ background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 10px; padding: 15px; margin: 15px 0; word-break: break-all; }}
-            .custom-badge {{ background: linear-gradient(135deg, #ff6b6b, #ee5a24); color: white; padding: 5px 15px; border-radius: 20px; font-size: 0.9em; font-weight: bold; }}
-            .qrcode {{ max-width: 200px; margin: 20px auto; border: 1px solid #ddd; border-radius: 10px; padding: 10px; background: white; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="success-container">
-                <div class="text-center mb-4">
-                    <h1 style="font-size:80px;color:#28a745;">✅</h1>
-                    <h2 class="text-success"> shortened successfully!{f'<span class="custom-badge ms-2">Custom Short Code</span>' if is_custom else ''}</h2>
-                </div>
-                <div class="mb-4">
-                    <h5>📎 Original URL:</h5>
-                    <div class="url-box"><a href="{long_url}" target="_blank">{long_url}</a></div>
-                    <h5>🔗 Short URL:</h5>
-                    <div class="url-box"><a href="{short_url}" id="short-url" target="_blank" style="font-size:1.2em;font-weight:bold;">{short_url}</a></div>
-                    {f'<div class="alert alert-info mt-3"><strong>🎉 Good News!</strong> You have used a custom short code <code>{short_code}</code>, making this link easier to remember and share!</div>' if is_custom else ''}
-                </div>
-                
-                <!-- 二维码区域 -->
-                <div class="text-center mb-4">
-                    <h5>📱 Scan QR Code to Access</h5>
-                    {'<img class="qrcode" src="' + qrcode_url + '" alt="QR Code">' if qrcode_exists else '<p class="text-muted">Failed to generate QR code</p>'}
-                    <div class="mt-2">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadQRCode()">💾 Download QR Code</button>
-                    </div>
-                </div>
-                
-                <div class="text-center mt-4">
-                    <button class="btn btn-success btn-lg px-5" onclick="copyToClipboard()">📋 Copy Short URL</button>
-                    <a href="{short_url}" target="_blank" class="btn btn-primary btn-lg px-5">🔗 Test Access</a>
-                    <a href="/" class="btn btn-outline-primary btn-lg px-5">🏠 Return to Home</a>
-                </div>
-                <div class="mt-4 text-center">
-                    <div class="btn-group" role="group">
-                        <button class="btn btn-outline-secondary btn-sm" onclick="shareOnTwitter()">🐦 Twitter</button>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="shareOnWhatsApp()">💬 WhatsApp</button>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="shareOnEmail()">📧 Email</button>
-                    </div>
-                </div>
-                <div class="mt-4 alert alert-light">
-                    <h6>📊 Statistics:</h6>
-                    <p class="mb-1">• Short Code: <code>{short_code}</code></p>
-                    <p class="mb-1">• Type: {'Custom' if is_custom else 'System Generated'}</p>
-                    <p class="mb-0">• Expiry: {expiry_text}</p>
-                </div>
-            </div>
-        </div>
-        <script>
-            function copyToClipboard() {{ navigator.clipboard.writeText("{short_url}"); alert('✅ Copied to clipboard!'); }}
-            function shareOnTwitter() {{ const text = `I used my custom URL shortener to create a short link: {short_url}`; window.open(`https://twitter.com/intent/tweet?text=${{encodeURIComponent(text)}}`, '_blank'); }}
-            function shareOnWhatsApp() {{ const text = `Share a short link: {short_url}`; window.open(`https://wa.me/?text=${{encodeURIComponent(text)}}`, '_blank'); }}
-            function shareOnEmail() {{ const subject = "Share a short link"; const body = `Here's the short link I created: {short_url}`; window.location.href = `mailto:?subject=${{encodeURIComponent(subject)}}&body=${{encodeURIComponent(body)}}`; }}
-            function downloadQRCode() {{
-                var img = document.querySelector('.qrcode');
-                if (img) {{
-                    var link = document.createElement('a');
-                    link.href = img.src;
-                    link.download = 'qrcode_{short_code}.png';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                }}
-            }}
-        </script>
-    </body>
-    </html>
-    '''
+    else:
+        expiry_text = _('permanent')
+
+    return render_template('success.html',
+                         long_url=long_url,
+                         short_url=short_url,
+                         short_code=short_code,
+                         is_custom=is_custom,
+                         expiry_text=expiry_text,
+                         qrcode_url=qrcode_url,
+                         qrcode_exists=qrcode_exists)
 
 print("🚀 Initializing the database...")
 init_db()

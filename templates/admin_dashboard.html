@@ -1,31 +1,38 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{{ g.locale }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Management Panel - URL Shortener</title>
+    <title>{{ _('admin_dashboard') }} - {{ _('site_title') }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background: #f8f9fa; padding: 20px; }
         .stat-card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; text-align: center; }
         .table-container { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
         .nav-tabs { margin-bottom: 20px; }
+        .nav-right { display: flex; align-items: center; gap: 8px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 class="mb-4">🔧 Management Panel</h1>
-        <p>Welcome, {{ username }}! <a href="/logout">Logout</a> | <a href="/">Back to Home</a></p>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1>{{ _('admin_dashboard') }}</h1>
+            <div class="nav-right">
+                {% include '_lang_switcher.html' %}
+                <a href="/" class="btn btn-outline-primary btn-sm">{{ _('back_home') }}</a>
+                <a href="/logout" class="btn btn-outline-danger btn-sm">{{ _('logout') }}</a>
+            </div>
+        </div>
 
         <ul class="nav nav-tabs" id="adminTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats" type="button" role="tab">Statistical Overview</button>
+                <button class="nav-link active" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats" type="button" role="tab">{{ _('system_overview') }}</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="links-tab" data-bs-toggle="tab" data-bs-target="#links" type="button" role="tab">Recently Created Links</button>
+                <button class="nav-link" id="links-tab" data-bs-toggle="tab" data-bs-target="#links" type="button" role="tab">{{ _('recent_urls') }}</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab">User Management</button>
+                <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab">{{ _('user_management') }}</button>
             </li>
         </ul>
 
@@ -33,35 +40,35 @@
             <div class="tab-pane fade show active" id="stats" role="tabpanel">
                 <div class="row mt-4">
                     <div class="col-md-3">
-                        <div class="stat-card"><h3>{{ total_urls }}</h3><p class="text-muted">Total number of links</p></div>
+                        <div class="stat-card"><h3>{{ total_urls }}</h3><p class="text-muted">{{ _('total_urls') }}</p></div>
                     </div>
                     <div class="col-md-3">
-                        <div class="stat-card"><h3>{{ custom_urls }}</h3><p class="text-muted">Custom Links</p></div>
+                        <div class="stat-card"><h3>{{ custom_urls }}</h3><p class="text-muted">{{ _('custom_urls') }}</p></div>
                     </div>
                     <div class="col-md-3">
-                        <div class="stat-card"><h3>{{ total_clicks }}</h3><p class="text-muted">Total Clicks</p></div>
+                        <div class="stat-card"><h3>{{ total_clicks }}</h3><p class="text-muted">{{ _('total_clicks') }}</p></div>
                     </div>
                     <div class="col-md-3">
-                        <div class="stat-card"><h3><a href="/">🔗</a></h3><p class="text-muted">Visit Frontend</p></div>
+                        <div class="stat-card"><h3><a href="/">{{ _('site_title') }}</a></h3><p class="text-muted">{{ _('back_home') }}</p></div>
                     </div>
                 </div>
             </div>
 
             <div class="tab-pane fade" id="links" role="tabpanel">
                 <div class="table-container mt-4">
-                    <h4>Recently Created Links</h4>
+                    <h4>{{ _('recent_urls') }}</h4>
                     <div class="table-responsive">
                         <table class="table table-striped">
                             <thead>
-                                32
+                                <tr>
                                     <th>ID</th>
-                                    <th>Short Code</th>
-                                    <th>Original URL</th>
-                                    <th>Custom</th>
-                                    <th>Created At</th>
-                                    <th>Clicks</th>
-                                    <th>Expires At</th>
-                                    <th>Actions</th>
+                                    <th>{{ _('short_code_info') }}</th>
+                                    <th>{{ _('original_url') }}</th>
+                                    <th>{{ _('type_label') }}</th>
+                                    <th>{{ _('created') }}</th>
+                                    <th>{{ _('clicks') }}</th>
+                                    <th>{{ _('expiry_label_info') }}</th>
+                                    <th>{{ _('actions') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -70,15 +77,15 @@
                                     <td>{{ url[0] }}</td>
                                     <td><code>{{ url[1] }}</code></td>
                                     <td><a href="{{ url[2] }}" target="_blank">{{ url[2][:50] }}...</a></td>
-                                    <td>{{ '✅' if url[3] else '❌' }}</td>
+                                    <td>{{ _('custom_type') if url[3] else _('system_generated_type') }}</td>
                                     <td class="local-time" data-utc="{{ url[4] }}">{{ url[4] }}</td>
                                     <td>{{ url[5] }}</td>
-                                    <td class="local-time" data-utc="{{ url[6] }}">{{ url[6] if url[6] else 'Permanent link' }}</td>
+                                    <td class="local-time" data-utc="{{ url[6] }}">{{ url[6] if url[6] else _('permanent') }}</td>
                                     <td>
                                         <form action="/admin/link/{{ url[0] }}/delete" method="POST" style="display:inline;">
-                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this link?')">Delete</button>
+                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('{{ _('confirm_delete_link') }}')">{{ _('delete') }}</button>
                                         </form>
-                                        <a href="/stats/{{ url[1] }}" class="btn btn-sm btn-info">📊 Statistics</a>
+                                        <a href="/stats/{{ url[1] }}" class="btn btn-sm btn-info">{{ _('stats') }}</a>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -90,16 +97,16 @@
 
             <div class="tab-pane fade" id="users" role="tabpanel">
                 <div class="table-container mt-4">
-                    <h4>All users</h4>
+                    <h4>{{ _('user_management') }}</h4>
                     <div class="table-responsive">
                         <table class="table table-striped">
                             <thead>
                                 <tr>
                                     <th>ID</th>
-                                    <th>Username</th>
-                                    <th>Email</th>
-                                    <th>Registration Time</th>
-                                    <th>Actions</th>
+                                    <th>{{ _('username') }}</th>
+                                    <th>{{ _('email') }}</th>
+                                    <th>{{ _('created') }}</th>
+                                    <th>{{ _('actions') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -111,7 +118,7 @@
                                     <td class="local-time" data-utc="{{ user[3] }}">{{ user[3] }}</td>
                                     <td>
                                         <form action="/admin/user/{{ user[0] }}/delete" method="POST" style="display:inline;">
-                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete user {{ user[1] }} and all their links?')">Delete</button>
+                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('{{ _('confirm_delete_user') }}')">{{ _('delete') }}</button>
                                         </form>
                                     </td>
                                 </tr>
@@ -126,13 +133,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // 将后端传来的 UTC 时间字符串（格式：YYYY-MM-DD HH:MM:SS.ffffff）转换为用户本地时间显示
         document.querySelectorAll('.local-time').forEach(el => {
             let utcStr = el.getAttribute('data-utc');
             if (utcStr) {
                 let utcDate = new Date(utcStr.replace(' ', 'T') + 'Z');
-                let localStr = utcDate.toLocaleString();
-                el.textContent = localStr;
+                el.textContent = utcDate.toLocaleString();
             }
         });
     </script>

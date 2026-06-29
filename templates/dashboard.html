@@ -60,7 +60,8 @@
                                         <img src="{{ url_for('static', filename='qrcodes/' + url.short_code + '.png') }}"
                                              class="qrcode-thumb"
                                              alt="QR Code"
-                                             onclick="window.open('{{ url_for('static', filename='qrcodes/' + url.short_code + '.png') }}', '_blank')"
+                                             data-full-url="{{ url_for('static', filename='qrcodes/' + url.short_code + '.png') }}"
+                                             onclick="window.open(this.dataset.fullUrl, '_blank')"
                                              title="Click to enlarge">
                                     {% else %}
                                         <span class="no-qrcode">{{ _('qr_failed') }}</span>
@@ -88,7 +89,7 @@
                                 <td>
                                     <div class="btn-group" role="group">
                                         <form action="/delete/{{ url.short_code }}" method="POST" style="display:inline;">
-                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('{{ _('confirm_delete_link') }}')">{{ _('delete') }}</button>
+                                            <button type="submit" class="btn btn-sm btn-danger" data-confirm="{{ _('confirm_delete_link') }}" onclick="return confirm(this.getAttribute('data-confirm'))">{{ _('delete') }}</button>
                                         </form>
                                         {% if url.expires_at %}
                                         <form action="/extend/{{ url.short_code }}" method="POST" style="display:inline;">
@@ -124,7 +125,7 @@
             if (!url) return;
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(url).then(function() {
-                    alert('{{ _('copied') }}');
+                    alert("{{ _('copied') }}");
                 }).catch(function() {
                     fallbackCopy(url);
                 });
@@ -142,7 +143,7 @@
             textarea.select();
             try {
                 document.execCommand('copy');
-                alert('{{ _('copied') }}');
+                alert("{{ _('copied') }}");
             } catch (err) {
                 alert('Copy failed');
             }

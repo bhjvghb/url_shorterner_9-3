@@ -122,6 +122,7 @@ def init_i18n(app):
     # 语言切换路由
     @app.route('/set-lang', methods=['POST'])
     def set_lang():
+        from flask import redirect as flask_redirect
         lang = request.form.get('lang', DEFAULT_LOCALE)
         if lang not in SUPPORTED_LOCALES:
             lang = DEFAULT_LOCALE
@@ -129,10 +130,11 @@ def init_i18n(app):
         session['locale'] = lang
         session.modified = True
 
-        # 302 重定向回来源页
-        next_url = request.form.get('next', request.referrer or '/')
-        resp = current_app.make_response(
-            f'<html><body><script>document.cookie="locale={lang};path=/;max-age=31536000";window.location.href="{next_url}";</script></body></html>'
-        )
+        next_url = request.form.get('next', '/')
+        # 安全: 仅允许相对路径, 拒绝开放重定向
+        if not next_url.startswith('/') or '//' in next_url:
+            next_url = '/'
+
+        resp = flask_redirect(next_url)
         resp.set_cookie('locale', lang, max_age=365 * 24 * 3600, path='/')
         return resp

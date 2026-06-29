@@ -4,11 +4,16 @@ import re
 import string
 import random
 import uuid
+import logging
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 import qrcode
 from PIL import Image
+import requests
 
 # 数据库适配优先使用 PostgreSQL（通过环境变量 DATABASE_URL），否则回退到 SQLite
 import sqlite3
@@ -16,6 +21,10 @@ import psycopg2
 import psycopg2.extras
 
 from i18n import init_i18n, _, flash_msg
+
+# 日志配置
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -124,6 +133,9 @@ def init_db():
                 user_agent TEXT,
                 accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 referer TEXT,
+                country VARCHAR(100),
+                region VARCHAR(100),
+                city VARCHAR(100),
                 FOREIGN KEY (short_code) REFERENCES url_mappings(short_code) ON DELETE CASCADE
             )
         ''')
@@ -137,6 +149,9 @@ def init_db():
                 user_agent TEXT,
                 accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 referer TEXT,
+                country TEXT,
+                region TEXT,
+                city TEXT,
                 FOREIGN KEY (short_code) REFERENCES url_mappings(short_code) ON DELETE CASCADE
             )
         ''')
@@ -200,6 +215,13 @@ def init_db():
             cur.execute("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP")
         print("✅ Add a reset_token_expiry column to users")
 
+    # 为 clicks 表添加地理位置列
+    for col_name in ('country', 'region', 'city'):
+        if not column_exists('clicks', col_name):
+            col_type = "VARCHAR(100)" if is_postgres else "TEXT"
+            cur.execute(f"ALTER TABLE clicks ADD COLUMN {col_name} {col_type}")
+            print(f"✅ Add a {col_name} column to clicks")
+
     conn.commit()
     cur.close()
     conn.close()
@@ -211,6 +233,75 @@ def hash_password(password):
 
 def verify_password(password_hash, password):
     return check_password_hash(password_hash, password)
+
+# ------------------ IP 地理定位 ------------------
+def geolocate_ip(ip_address):
+    """通过 ip-api.com 免费 API 查询 IP 地理位置（无 API Key，每分钟45次请求限制）"""
+    # 跳过本地/私有 IP
+    private_prefixes = ('127.', '10.', '192.168.', '172.16.', '172.17.', '172.18.',
+                        '172.19.', '172.20.', '172.21.', '172.22.', '172.23.',
+                        '172.24.', '172.25.', '172.26.', '172.27.', '172.28.',
+                        '172.29.', '172.30.', '172.31.', '0.', '::1')
+    if ip_address.startswith(private_prefixes) or ip_address == 'localhost':
+        return {'country': 'Local', 'region': '', 'city': ''}
+
+    try:
+        resp = requests.get(f'http://ip-api.com/json/{ip_address}?fields=country,regionName,city',
+                           timeout=3)
+        if resp.status_code == 200:
+            data = resp.json()
+            return {
+                'country': data.get('country', ''),
+                'region': data.get('regionName', ''),
+                'city': data.get('city', '')
+            }
+    except Exception as e:
+        logger.warning(f"IP geolocation failed for {ip_address}: {e}")
+
+    return {'country': '', 'region': '', 'city': ''}
+
+# ------------------ 发送密码重置邮件 ------------------
+def send_reset_email(to_email, reset_link):
+    """通过 SMTP 发送密码重置邮件，配置通过环境变量传入"""
+    smtp_host = os.environ.get('SMTP_HOST')
+    smtp_port = os.environ.get('SMTP_PORT', '587')
+    smtp_user = os.environ.get('SMTP_USER')
+    smtp_pass = os.environ.get('SMTP_PASS')
+    smtp_from = os.environ.get('SMTP_FROM', smtp_user or 'noreply@urlshortener.com')
+
+    if not all([smtp_host, smtp_user, smtp_pass]):
+        logger.info(f"[DEMO MODE] SMTP not configured. Reset link: {reset_link}")
+        return False, reset_link  # 返回链接供演示模式使用
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = smtp_from
+        msg['To'] = to_email
+        msg['Subject'] = 'Password Reset - URL Shortener'
+        body = f"""Hi,
+
+You requested a password reset for your URL Shortener account.
+
+Click the link below to reset your password (valid for 1 hour):
+{reset_link}
+
+If you did not request this, please ignore this email.
+
+--
+URL Shortener
+"""
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+        with smtplib.SMTP(smtp_host, int(smtp_port), timeout=10) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+
+        logger.info(f"Password reset email sent to {to_email}")
+        return True, None
+    except Exception as e:
+        logger.error(f"Failed to send reset email to {to_email}: {e}")
+        return False, str(reset_link)  # 失败时回退到演示模式
 
 # ------------------ 登录保护装饰器 ------------------
 def login_required(f):
@@ -381,16 +472,19 @@ def redirect_to_long_url(short_code):
     user_agent = request.headers.get('User-Agent', 'Unknown')
     referer = request.headers.get('Referer', '')
 
+    # IP 地理定位
+    geo = geolocate_ip(ip_address)
+
     if is_postgres:
         cur.execute("""
-            INSERT INTO clicks (short_code, ip_address, user_agent, referer)
-            VALUES (%s, %s, %s, %s)
-        """, (short_code, ip_address, user_agent, referer))
+            INSERT INTO clicks (short_code, ip_address, user_agent, referer, country, region, city)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (short_code, ip_address, user_agent, referer, geo['country'], geo['region'], geo['city']))
     else:
         cur.execute("""
-            INSERT INTO clicks (short_code, ip_address, user_agent, referer)
-            VALUES (?, ?, ?, ?)
-        """, (short_code, ip_address, user_agent, referer))
+            INSERT INTO clicks (short_code, ip_address, user_agent, referer, country, region, city)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (short_code, ip_address, user_agent, referer, geo['country'], geo['region'], geo['city']))
 
     conn.commit()
     cur.close()
@@ -493,13 +587,25 @@ def forgot_password():
                 cur.execute("UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?", (token, expiry, user[0]))
             conn.commit()
             reset_link = url_for('reset_password', token=token, _external=True)
-            print(f"Password reset link: {reset_link}")
+
+            # 尝试通过 SMTP 发送邮件，失败则回退到页面显示链接
+            success, fallback_link = send_reset_email(email, reset_link)
             cur.close()
             conn.close()
-            return f"<p>{_('reset_link_generated')}</p><p><a href='{reset_link}'>{reset_link}</a></p>"
+
+            if success:
+                logger.info(f"Reset email sent to {email}")
+            else:
+                logger.warning(f"SMTP unavailable, showing reset link on page for {email}")
+
+            return render_template('forgot_password.html',
+                                 email_sent=True,
+                                 reset_link=fallback_link if fallback_link else None)
+
         cur.close()
         conn.close()
-        return '<p>' + _('reset_link_sent') + '</p>'
+        # 为安全起见，无论邮箱是否存在都显示相同的提示信息
+        return render_template('forgot_password.html', email_sent=True, reset_link=None)
     return render_template('forgot_password.html')
 
 # ------------------ 重置密码 ------------------
@@ -755,8 +861,8 @@ def link_stats(short_code):
         conn.close()
         return render_error_page(key='not_owner', status_code=403)
 
-    # 查询点击记录
-    cur.execute("SELECT ip_address, user_agent, accessed_at, referer FROM clicks WHERE short_code = %s ORDER BY accessed_at DESC" if is_postgres else "SELECT ip_address, user_agent, accessed_at, referer FROM clicks WHERE short_code = ? ORDER BY accessed_at DESC", (short_code,))
+    # 查询点击记录（含地理位置）
+    cur.execute("SELECT ip_address, user_agent, accessed_at, referer, country, region, city FROM clicks WHERE short_code = %s ORDER BY accessed_at DESC" if is_postgres else "SELECT ip_address, user_agent, accessed_at, referer, country, region, city FROM clicks WHERE short_code = ? ORDER BY accessed_at DESC", (short_code,))
     clicks = cur.fetchall()
     cur.close()
     conn.close()
@@ -766,7 +872,10 @@ def link_stats(short_code):
         'ip': c[0],
         'user_agent': c[1],
         'accessed_at': c[2],
-        'referer': c[3]
+        'referer': c[3],
+        'country': c[4] if len(c) > 4 else '',
+        'region': c[5] if len(c) > 5 else '',
+        'city': c[6] if len(c) > 6 else ''
     } for c in clicks]
 
     return render_template('link_stats.html', short_code=short_code, long_url=long_url, clicks=clicks_list)
@@ -816,6 +925,18 @@ os.makedirs(qrcode_dir, exist_ok=True)
 
 # ------------------ 启动 ------------------
 if __name__ == '__main__':
+    # 生产环境安全检查
+    if app.secret_key == 'dev-secret-key-change-in-production':
+        logger.warning("=" * 60)
+        logger.warning("⚠️  SECURITY WARNING: Using default SECRET_KEY!")
+        logger.warning("   Set the SECRET_KEY environment variable in production.")
+        logger.warning("   Example: export SECRET_KEY=$(python -c 'import secrets; print(secrets.token_hex(32))')")
+        logger.warning("=" * 60)
+
+    if not os.environ.get('SMTP_HOST'):
+        logger.info("ℹ️  SMTP not configured. Password reset will use demo mode (show link on page).")
+        logger.info("   Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS env vars to enable email sending.")
+
     init_db()
     print("=" * 60)
     print("🚀 URL Shortener started successfully!")

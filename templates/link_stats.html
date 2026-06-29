@@ -33,6 +33,7 @@
                             <tr>
                                 <th>{{ _('accessed_at') }}</th>
                                 <th>{{ _('ip_address') }}</th>
+                                <th>{{ _('location') }}</th>
                                 <th>{{ _('user_agent') }}</th>
                                 <th>{{ _('referrer') }}</th>
                             </tr>
@@ -42,8 +43,9 @@
                             <tr>
                                 <td class="local-time" data-utc="{{ click.accessed_at }}">{{ click.accessed_at }}</td>
                                 <td>{{ click.ip }}</td>
+                                <td>{% if click.country %}{{ click.country }}{% if click.region %}, {{ click.region }}{% endif %}{% if click.city %}, {{ click.city }}{% endif %}{% else %}-{% endif %}</td>
                                 <td style="word-break: break-all;">{{ click.user_agent[:100] }}{% if click.user_agent|length > 100 %}...{% endif %}</td>
-                                <td style="word-break: break-all;">{{ click.referer if click.referer else 'Direct Access' }}</td>
+                                <td style="word-break: break-all;">{{ click.referer if click.referer else _('direct_access') }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>

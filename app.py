@@ -106,7 +106,10 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 click_count INTEGER DEFAULT 0,
                 user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-                expires_at TIMESTAMP
+                expires_at TIMESTAMP,
+                password_hash VARCHAR(255),
+                tag VARCHAR(50),
+                updated_at TIMESTAMP
             )
         ''')
     else:
@@ -119,7 +122,10 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 click_count INTEGER DEFAULT 0,
                 user_id INTEGER REFERENCES users(id),
-                expires_at TIMESTAMP
+                expires_at TIMESTAMP,
+                password_hash TEXT,
+                tag TEXT,
+                updated_at TIMESTAMP
             )
         ''')
 
@@ -199,6 +205,14 @@ def init_db():
         else:
             cur.execute("ALTER TABLE url_mappings ADD COLUMN expires_at TIMESTAMP")
         print("✅ Add an expires_at column to url_mappings")
+
+    # 新增：密码保护 / 标签 / 编辑时间
+    for col_name, col_type in [('password_hash', 'VARCHAR(255)' if is_postgres else 'TEXT'),
+                                ('tag', 'VARCHAR(50)' if is_postgres else 'TEXT'),
+                                ('updated_at', 'TIMESTAMP')]:
+        if not column_exists('url_mappings', col_name):
+            cur.execute(f"ALTER TABLE url_mappings ADD COLUMN {col_name} {col_type}")
+            print(f"✅ Add a {col_name} column to url_mappings")
 
     # 为 users 表添加可能缺失的列
     if not column_exists('users', 'reset_token'):
@@ -357,6 +371,7 @@ def shorten_url():
     long_url = request.form.get('long_url', '').strip()
     custom_code = request.form.get('custom_code', '').strip()
     expiry_choice = request.form.get('expiry', 'forever')
+    password = request.form.get('password', '').strip()  # 可选密码保护
 
     if not long_url:
         return render_error_page(key='url_required')
@@ -396,6 +411,9 @@ def shorten_url():
 
     user_id = session.get('user_id')
 
+    # 密码哈希
+    pwd_hash = hash_password(password) if password else None
+
     # 计算过期时间
     expires_at = None
     if expiry_choice in EXPIRY_OPTIONS:
@@ -408,14 +426,14 @@ def shorten_url():
     try:
         if is_postgres:
             cur.execute("""
-                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at)
-                VALUES (%s, %s, %s, 0, %s, %s)
-            """, (long_url, short_code, is_custom, user_id, expires_at))
+                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at, password_hash)
+                VALUES (%s, %s, %s, 0, %s, %s, %s)
+            """, (long_url, short_code, is_custom, user_id, expires_at, pwd_hash))
         else:
             cur.execute("""
-                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at)
-                VALUES (?, ?, ?, 0, ?, ?)
-            """, (long_url, short_code, 1 if is_custom else 0, user_id, expires_at))
+                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at, password_hash)
+                VALUES (?, ?, ?, 0, ?, ?, ?)
+            """, (long_url, short_code, 1 if is_custom else 0, user_id, expires_at, pwd_hash))
         conn.commit()
     except Exception as e:
         cur.close()
@@ -449,18 +467,25 @@ def redirect_to_long_url(short_code):
     cur = conn.cursor()
     is_postgres = os.environ.get('DATABASE_URL') is not None
 
-    cur.execute("SELECT id, long_url, expires_at FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT id, long_url, expires_at FROM url_mappings WHERE short_code = ?", (short_code,))
+    cur.execute("SELECT id, long_url, expires_at, password_hash FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT id, long_url, expires_at, password_hash FROM url_mappings WHERE short_code = ?", (short_code,))
     result = cur.fetchone()
     if not result:
         cur.close()
         conn.close()
         return render_error_page(key='url_not_found', status_code=404)
 
-    url_id, long_url, expires_at = result
+    url_id, long_url, expires_at, password_hash = result
     if expires_at and expires_at < datetime.now():
         cur.close()
         conn.close()
         return render_error_page(key='url_expired', status_code=410)
+
+    # 密码保护检查
+    if password_hash:
+        cur.close()
+        conn.close()
+        session['redirect_target'] = short_code
+        return redirect(url_for('verify_password_page', short_code=short_code))
 
     cur.execute("UPDATE url_mappings SET click_count = click_count + 1 WHERE id = %s" if is_postgres else "UPDATE url_mappings SET click_count = click_count + 1 WHERE id = ?", (url_id,))
 
@@ -490,6 +515,50 @@ def redirect_to_long_url(short_code):
     cur.close()
     conn.close()
     return redirect(long_url)
+
+# ------------------ 密码保护验证 ------------------
+@app.route('/p/<short_code>', methods=['GET', 'POST'])
+def verify_password_page(short_code):
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        conn = get_db_connection()
+        cur = conn.cursor()
+        is_postgres = os.environ.get('DATABASE_URL') is not None
+
+        cur.execute("SELECT long_url, password_hash FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT long_url, password_hash FROM url_mappings WHERE short_code = ?", (short_code,))
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            conn.close()
+            return render_error_page(key='url_not_found', status_code=404)
+
+        long_url, pwd_hash = row
+        if verify_password(pwd_hash, password):
+            # 密码正确：记录点击并重定向
+            ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
+            if ip_address and ',' in ip_address:
+                ip_address = ip_address.split(',')[0].strip()
+            user_agent = request.headers.get('User-Agent', '')
+            referer = request.headers.get('Referer', '')
+            geo = geolocate_ip(ip_address)
+            if is_postgres:
+                cur.execute("UPDATE url_mappings SET click_count = click_count + 1 WHERE short_code = %s", (short_code,))
+                cur.execute("INSERT INTO clicks (short_code, ip_address, user_agent, referer, country, region, city) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                           (short_code, ip_address, user_agent, referer, geo['country'], geo['region'], geo['city']))
+            else:
+                cur.execute("UPDATE url_mappings SET click_count = click_count + 1 WHERE short_code = ?", (short_code,))
+                cur.execute("INSERT INTO clicks (short_code, ip_address, user_agent, referer, country, region, city) VALUES (?,?,?,?,?,?,?)",
+                           (short_code, ip_address, user_agent, referer, geo['country'], geo['region'], geo['city']))
+            conn.commit()
+            cur.close()
+            conn.close()
+            return redirect(long_url)
+        else:
+            cur.close()
+            conn.close()
+            return render_template('protected.html', short_code=short_code, error=_('password_incorrect'))
+
+    return render_template('protected.html', short_code=short_code, error=None)
 
 # ------------------ 注册 ------------------
 @app.route('/register', methods=['GET', 'POST'])
@@ -646,35 +715,62 @@ def reset_password(token):
 @login_required
 def dashboard():
     user_id = session['user_id']
+    search = request.args.get('search', '').strip()
+    tag_filter = request.args.get('tag', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+
     conn = get_db_connection()
     cur = conn.cursor()
     is_postgres = os.environ.get('DATABASE_URL') is not None
 
-    cur.execute("""
-        SELECT short_code, long_url, click_count, created_at, is_custom, expires_at
-        FROM url_mappings
-        WHERE user_id = %s
+    # 构建查询
+    base_where = "WHERE user_id = %s" if is_postgres else "WHERE user_id = ?"
+    params = [user_id]
+
+    if search:
+        base_where += (" AND (long_url LIKE %s OR short_code LIKE %s)" if is_postgres
+                       else " AND (long_url LIKE ? OR short_code LIKE ?)")
+        params.extend([f'%{search}%', f'%{search}%'])
+
+    if tag_filter:
+        base_where += (" AND tag = %s" if is_postgres else " AND tag = ?")
+        params.append(tag_filter)
+
+    # 获取总数（分页用）
+    count_sql = f"SELECT COUNT(*) FROM url_mappings {base_where}"
+    cur.execute(count_sql, tuple(params))
+    total_links = cur.fetchone()[0]
+    total_pages = max(1, (total_links + per_page - 1) // per_page)
+    page = min(page, total_pages)
+
+    # 获取所有标签（用于筛选下拉）
+    tag_sql = "SELECT DISTINCT tag FROM url_mappings WHERE user_id = %s AND tag IS NOT NULL AND tag != '' ORDER BY tag" if is_postgres else "SELECT DISTINCT tag FROM url_mappings WHERE user_id = ? AND tag IS NOT NULL AND tag != '' ORDER BY tag"
+    cur.execute(tag_sql, (user_id,))
+    tags = [r[0] for r in cur.fetchall()]
+
+    # 分页查询
+    offset = (page - 1) * per_page
+    select_sql = f"""
+        SELECT short_code, long_url, click_count, created_at, is_custom, expires_at, password_hash, tag
+        FROM url_mappings {base_where}
         ORDER BY created_at DESC
-    """ if is_postgres else """
-        SELECT short_code, long_url, click_count, created_at, is_custom, expires_at
-        FROM url_mappings
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-    """, (user_id,))
+        LIMIT {per_page} OFFSET {offset}
+    """
+    cur.execute(select_sql, tuple(params))
     rows = cur.fetchall()
+
     urls = []
     for row in rows:
-        short_code, long_url, click_count, created_at, is_custom, expires_at = row
+        short_code, long_url, click_count, created_at, is_custom, expires_at, password_hash, tag = row
         is_expired = False
         if expires_at and expires_at < datetime.now():
             is_expired = True
-        
-        # 构造完整短链接
+
         short_url = f"{request.host_url}{short_code}"
-        # 检查二维码文件是否存在
         qrcode_path = os.path.join(app.static_folder, 'qrcodes', f'{short_code}.png')
         qrcode_exists = os.path.exists(qrcode_path)
-        
+
         urls.append({
             'short_code': short_code,
             'long_url': long_url,
@@ -684,11 +780,15 @@ def dashboard():
             'is_custom': is_custom,
             'expires_at': expires_at,
             'is_expired': is_expired,
-            'qrcode_exists': qrcode_exists
+            'qrcode_exists': qrcode_exists,
+            'is_protected': bool(password_hash),
+            'tag': tag or ''
         })
     cur.close()
     conn.close()
-    return render_template('dashboard.html', urls=urls, username=session['username'])
+    return render_template('dashboard.html', urls=urls, username=session['username'],
+                          search=search, tag_filter=tag_filter, tags=tags,
+                          page=page, total_pages=total_pages, total_links=total_links)
 
 # ------------------ 删除链接 ------------------
 @app.route('/delete/<short_code>', methods=['POST'])
@@ -755,6 +855,68 @@ def extend_link(short_code):
         cur.execute("UPDATE url_mappings SET expires_at = COALESCE(expires_at, NOW()) + INTERVAL '30 days' WHERE short_code = %s", (short_code,))
     else:
         cur.execute("UPDATE url_mappings SET expires_at = datetime(COALESCE(expires_at, CURRENT_TIMESTAMP), '+30 days') WHERE short_code = ?", (short_code,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('dashboard'))
+
+# ------------------ 编辑链接 ------------------
+@app.route('/edit/<short_code>', methods=['POST'])
+@login_required
+def edit_link(short_code):
+    user_id = session['user_id']
+    new_long_url = request.form.get('new_long_url', '').strip()
+    if not new_long_url:
+        return render_error_page(key='url_required')
+    if not new_long_url.startswith(('http://', 'https://')):
+        new_long_url = 'https://' + new_long_url
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    cur.execute("SELECT user_id FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT user_id FROM url_mappings WHERE short_code = ?", (short_code,))
+    row = cur.fetchone()
+    if not row:
+        cur.close(); conn.close()
+        return render_error_page(key='link_not_found', status_code=404)
+    if row[0] != user_id and session.get('username') != 'admin':
+        cur.close(); conn.close()
+        return render_error_page(key='not_owner', status_code=403)
+
+    if is_postgres:
+        cur.execute("UPDATE url_mappings SET long_url = %s, updated_at = NOW() WHERE short_code = %s", (new_long_url, short_code))
+    else:
+        cur.execute("UPDATE url_mappings SET long_url = ?, updated_at = CURRENT_TIMESTAMP WHERE short_code = ?", (new_long_url, short_code))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for('dashboard'))
+
+# ------------------ 更新标签 ------------------
+@app.route('/tag/<short_code>', methods=['POST'])
+@login_required
+def update_tag(short_code):
+    user_id = session['user_id']
+    tag = request.form.get('tag', '').strip()[:50]
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    cur.execute("SELECT user_id FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT user_id FROM url_mappings WHERE short_code = ?", (short_code,))
+    row = cur.fetchone()
+    if not row:
+        cur.close(); conn.close()
+        return render_error_page(key='link_not_found', status_code=404)
+    if row[0] != user_id and session.get('username') != 'admin':
+        cur.close(); conn.close()
+        return render_error_page(key='not_owner', status_code=403)
+
+    if is_postgres:
+        cur.execute("UPDATE url_mappings SET tag = NULLIF(%s, '') WHERE short_code = %s", (tag, short_code))
+    else:
+        cur.execute("UPDATE url_mappings SET tag = NULLIF(?, '') WHERE short_code = ?", (tag, short_code))
     conn.commit()
     cur.close()
     conn.close()

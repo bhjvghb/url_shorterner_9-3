@@ -5,6 +5,7 @@ import string
 import random
 import uuid
 import logging
+import base64
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -411,8 +412,8 @@ def shorten_url():
 
     user_id = session.get('user_id')
 
-    # 密码哈希
-    pwd_hash = hash_password(password) if password else None
+    # 密码编码（base64 可逆编码，便于用户在仪表盘查看）
+    pwd_hash = base64.b64encode(password.encode()).decode() if password else None
 
     # 计算过期时间
     expires_at = None
@@ -533,7 +534,13 @@ def verify_password_page(short_code):
             return render_error_page(key='url_not_found', status_code=404)
 
         long_url, pwd_hash = row
-        if verify_password(pwd_hash, password):
+        # 解码 base64 验证密码
+        try:
+            stored_password = base64.b64decode(pwd_hash).decode() if pwd_hash else None
+        except Exception:
+            stored_password = None
+
+        if stored_password and password == stored_password:
             # 密码正确：记录点击并重定向
             ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
             if ip_address and ',' in ip_address:
@@ -921,6 +928,33 @@ def update_tag(short_code):
     cur.close()
     conn.close()
     return redirect(url_for('dashboard'))
+
+# ------------------ 查看密码（仪表盘用） ------------------
+@app.route('/password/<short_code>')
+@login_required
+def view_password(short_code):
+    user_id = session['user_id']
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    cur.execute("SELECT user_id, password_hash FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT user_id, password_hash FROM url_mappings WHERE short_code = ?", (short_code,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not row or row[0] != user_id:
+        abort(403)
+
+    pwd_hash = row[1]
+    if not pwd_hash:
+        return {'password': None}
+
+    try:
+        password = base64.b64decode(pwd_hash).decode()
+        return {'password': password}
+    except Exception:
+        return {'password': None}
 
 # ------------------ 管理面板 ------------------
 @app.route('/admin')

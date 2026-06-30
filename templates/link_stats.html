@@ -5,16 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ short_code }} - {{ _('link_statistics') }} - {{ _('site_title') }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         body { background: #f8f9fa; padding: 20px; }
-        .stats-card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .stats-card { background: white; border-radius: 15px; padding: 24px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); margin-bottom: 20px; }
         .nav-right { display: flex; align-items: center; gap: 8px; }
+        .overview-box {
+            text-align: center; padding: 20px 12px; border-radius: 12px;
+            color: white; min-height: 100px; display: flex; flex-direction: column; justify-content: center;
+        }
+        .overview-box .number { font-size: 2rem; font-weight: 700; }
+        .overview-box .label { font-size: 0.85rem; opacity: 0.9; margin-top: 4px; }
+        .bg-purple { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .bg-teal { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        .bg-orange { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .bg-blue { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .chart-wrapper { position: relative; height: 280px; }
+        .chart-wrapper-tall { position: relative; height: 320px; }
+        .section-title {
+            font-size: 1.1rem; font-weight: 600; color: #495057;
+            margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #667eea;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- ===== 页头 ===== -->
         <div class="stats-card">
-            <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2>{{ _('link_statistics') }}: <code>{{ short_code }}</code></h2>
                 <div class="nav-right">
                     {% include '_lang_switcher.html' %}
@@ -22,43 +40,153 @@
                     <a href="/" class="btn btn-outline-secondary btn-sm">{{ _('back_home') }}</a>
                 </div>
             </div>
-            <p>{{ _('original_url_label') }}: <a href="{{ long_url }}" target="_blank">{{ long_url }}</a></p>
-            <p>{{ _('total_clicks_for') }}: {{ clicks|length }}</p>
-            <hr>
-            <h4>{{ _('link_statistics') }}</h4>
-            {% if clicks %}
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead>
-                            <tr>
-                                <th>{{ _('accessed_at') }}</th>
-                                <th>{{ _('ip_address') }}</th>
-                                <th>{{ _('location') }}</th>
-                                <th>{{ _('user_agent') }}</th>
-                                <th>{{ _('referrer') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for click in clicks %}
-                            <tr>
-                                <td class="local-time" data-utc="{{ click.accessed_at }}">{{ click.accessed_at }}</td>
-                                <td>{{ click.ip }}</td>
-                                <td>{% if click.country %}{{ click.country }}{% if click.region %}, {{ click.region }}{% endif %}{% if click.city %}, {{ click.city }}{% endif %}{% else %}-{% endif %}</td>
-                                <td style="word-break: break-all;">{{ click.user_agent[:100] }}{% if click.user_agent|length > 100 %}...{% endif %}</td>
-                                <td style="word-break: break-all;">{{ click.referer if click.referer else _('direct_access') }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <p class="text-muted">{{ _('no_clicks') }}</p>
-            {% endif %}
+            <p>{{ _('original_url_label') }}: <a href="{{ long_url }}" target="_blank" class="text-break">{{ long_url }}</a></p>
         </div>
+
+        <!-- ===== 概览卡片 ===== -->
+        <div class="stats-card">
+            <h5 class="section-title">{{ _('overview') }}</h5>
+            <div class="row g-3">
+                <div class="col-6 col-md-3">
+                    <div class="overview-box bg-purple">
+                        <div class="number">{{ total_clicks }}</div>
+                        <div class="label">{{ _('total_clicks') }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="overview-box bg-teal">
+                        <div class="number">{{ today_clicks }}</div>
+                        <div class="label">{{ _('today_clicks') }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="overview-box bg-orange">
+                        {% if referer_stats and referer_stats|length > 0 %}
+                        <div class="number" style="font-size: 1.2rem; word-break: break-all;">{{ referer_stats[0].domain }}</div>
+                        {% else %}
+                        <div class="number">-</div>
+                        {% endif %}
+                        <div class="label">{{ _('top_referrer') }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="overview-box bg-blue">
+                        {% if browser_stats and browser_stats|length > 0 %}
+                        <div class="number" style="font-size: 1.2rem;">{{ browser_stats[0].name }}</div>
+                        {% else %}
+                        <div class="number">-</div>
+                        {% endif %}
+                        <div class="label">{{ _('top_browser') }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if total_clicks > 0 %}
+        <!-- ===== 日点击趋势图 ===== -->
+        <div class="stats-card">
+            <h5 class="section-title">{{ _('click_trend') }}</h5>
+            <div class="chart-wrapper-tall">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+
+        <!-- ===== 来源分析 + 国家分布 并排 ===== -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="stats-card h-100">
+                    <h5 class="section-title">{{ _('source_analysis') }}</h5>
+                    {% if referer_stats|length > 0 %}
+                    <div class="chart-wrapper">
+                        <canvas id="refererChart"></canvas>
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center py-4">{{ _('no_data_for_chart') }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="stats-card h-100">
+                    <h5 class="section-title">{{ _('top_country') }}</h5>
+                    {% if country_stats|length > 0 %}
+                    <div class="chart-wrapper">
+                        <canvas id="countryChart"></canvas>
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center py-4">{{ _('no_data_for_chart') }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 设备与浏览器 并排 ===== -->
+        <div class="row" style="margin-top: 20px;">
+            <div class="col-md-6">
+                <div class="stats-card h-100">
+                    <h5 class="section-title">{{ _('browser') }}</h5>
+                    {% if browser_stats|length > 0 %}
+                    <div class="chart-wrapper">
+                        <canvas id="browserChart"></canvas>
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center py-4">{{ _('no_data_for_chart') }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="stats-card h-100">
+                    <h5 class="section-title">{{ _('operating_system') }}</h5>
+                    {% if os_stats|length > 0 %}
+                    <div class="chart-wrapper">
+                        <canvas id="osChart"></canvas>
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center py-4">{{ _('no_data_for_chart') }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="stats-card text-center">
+            <p class="text-muted py-3">{{ _('no_clicks') }}</p>
+        </div>
+        {% endif %}
+
+        <!-- ===== 点击明细表 ===== -->
+        {% if clicks %}
+        <div class="stats-card" style="margin-top: 20px;">
+            <h5 class="section-title">{{ _('link_statistics') }}</h5>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>{{ _('accessed_at') }}</th>
+                            <th>{{ _('ip_address') }}</th>
+                            <th>{{ _('location') }}</th>
+                            <th>{{ _('user_agent') }}</th>
+                            <th>{{ _('referrer') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for click in clicks %}
+                        <tr>
+                            <td class="local-time" data-utc="{{ click.accessed_at }}">{{ click.accessed_at }}</td>
+                            <td>{{ click.ip }}</td>
+                            <td>{% if click.country %}{{ click.country }}{% if click.region %}, {{ click.region }}{% endif %}{% if click.city %}, {{ click.city }}{% endif %}{% else %}-{% endif %}</td>
+                            <td style="word-break: break-all; max-width: 220px;">{{ click.user_agent[:100] }}{% if click.user_agent|length > 100 %}...{% endif %}</td>
+                            <td style="word-break: break-all; max-width: 200px;">{{ click.referer if click.referer else _('direct_access') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // ==== UTC 时间转本地时间 ====
         document.querySelectorAll('.local-time').forEach(el => {
             let utcStr = el.getAttribute('data-utc');
             if (utcStr) {
@@ -66,6 +194,163 @@
                 el.textContent = utcDate.toLocaleString();
             }
         });
+
+        // ==== Chart.js 全局配色 ====
+        const colors = ['#667eea', '#764ba2', '#11998e', '#f5576c', '#4facfe',
+                        '#f093fb', '#43e97b', '#fa709a', '#a18cd1', '#fbc2eb'];
+        const chartFont = "'Segoe UI', system-ui, sans-serif";
+
+        {% if total_clicks > 0 %}
+        // ==== 日点击趋势折线图 ====
+        const trendLabels = {{ trend_data|map(attribute='date')|list|tojson }};
+        const trendCounts = {{ trend_data|map(attribute='count')|list|tojson }};
+        new Chart(document.getElementById('trendChart'), {
+            type: 'line',
+            data: {
+                labels: trendLabels,
+                datasets: [{
+                    label: '{{ _("daily_clicks") }}',
+                    data: trendCounts,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#667eea'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: { grid: { display: false }, ticks: { font: { family: chartFont, size: 11 } } },
+                    y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 11 } } }
+                }
+            }
+        });
+
+        {% if referer_stats|length > 0 %}
+        // ==== 来源分布饼图 ====
+        const refLabels = {{ referer_stats|map(attribute='domain')|list|tojson }};
+        const refCounts = {{ referer_stats|map(attribute='count')|list|tojson }};
+        new Chart(document.getElementById('refererChart'), {
+            type: 'doughnut',
+            data: {
+                labels: refLabels,
+                datasets: [{
+                    data: refCounts,
+                    backgroundColor: colors.slice(0, refLabels.length),
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { font: { family: chartFont, size: 11 }, padding: 12, usePointStyle: true, pointStyleWidth: 10 }
+                    }
+                }
+            }
+        });
+        {% endif %}
+
+        {% if country_stats|length > 0 %}
+        // ==== 国家分布水平柱状图 ====
+        const countryLabels = {{ country_stats|map(attribute='name')|list|tojson }};
+        const countryCounts = {{ country_stats|map(attribute='count')|list|tojson }};
+        new Chart(document.getElementById('countryChart'), {
+            type: 'bar',
+            data: {
+                labels: countryLabels,
+                datasets: [{
+                    label: '{{ _("total_clicks") }}',
+                    data: countryCounts,
+                    backgroundColor: colors.slice(0, countryLabels.length),
+                    borderWidth: 0,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 11 } } },
+                    y: { ticks: { font: { family: chartFont, size: 11 } } }
+                }
+            }
+        });
+        {% endif %}
+
+        {% if browser_stats|length > 0 %}
+        // ==== 浏览器分布水平柱状图 ====
+        const browserLabels = {{ browser_stats|map(attribute='name')|list|tojson }};
+        const browserCounts = {{ browser_stats|map(attribute='count')|list|tojson }};
+        new Chart(document.getElementById('browserChart'), {
+            type: 'bar',
+            data: {
+                labels: browserLabels,
+                datasets: [{
+                    label: '{{ _("total_clicks") }}',
+                    data: browserCounts,
+                    backgroundColor: ['#667eea', '#11998e', '#f5576c', '#4facfe', '#f093fb',
+                                      '#764ba2', '#43e97b', '#fa709a', '#a18cd1', '#fbc2eb'],
+                    borderWidth: 0,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 11 } } },
+                    y: { ticks: { font: { family: chartFont, size: 11 } } }
+                }
+            }
+        });
+        {% endif %}
+
+        {% if os_stats|length > 0 %}
+        // ==== OS 分布水平柱状图 ====
+        const osLabels = {{ os_stats|map(attribute='name')|list|tojson }};
+        const osCounts = {{ os_stats|map(attribute='count')|list|tojson }};
+        new Chart(document.getElementById('osChart'), {
+            type: 'bar',
+            data: {
+                labels: osLabels,
+                datasets: [{
+                    label: '{{ _("total_clicks") }}',
+                    data: osCounts,
+                    backgroundColor: ['#4facfe', '#667eea', '#11998e', '#f093fb', '#f5576c',
+                                      '#764ba2', '#43e97b', '#fa709a', '#a18cd1', '#fbc2eb'],
+                    borderWidth: 0,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 11 } } },
+                    y: { ticks: { font: { family: chartFont, size: 11 } } }
+                }
+            }
+        });
+        {% endif %}
+        {% endif %}
     </script>
 </body>
 </html>

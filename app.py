@@ -838,6 +838,47 @@ def admin_delete_link(link_id):
     conn.close()
     return redirect(url_for('admin_dashboard'))
 
+# ------------------ User-Agent 解析 ------------------
+def parse_user_agent(ua_string):
+    """从 User-Agent 字符串中解析浏览器和操作系统名称"""
+    ua = (ua_string or '').lower()
+    browser = 'Other'
+    os_name = 'Other'
+
+    # 浏览器检测（注意顺序很重要）
+    if 'edg/' in ua:
+        browser = 'Edge'
+    elif 'opr/' in ua or 'opera' in ua:
+        browser = 'Opera'
+    elif 'chrome/' in ua and 'chromium' not in ua:
+        browser = 'Chrome'
+    elif 'firefox/' in ua:
+        browser = 'Firefox'
+    elif 'safari/' in ua and 'chrome/' not in ua:
+        browser = 'Safari'
+    elif 'msie ' in ua or 'trident/' in ua:
+        browser = 'IE'
+
+    # 操作系统检测
+    if 'windows nt 10' in ua or 'windows nt 11' in ua:
+        os_name = 'Windows 10/11'
+    elif 'windows nt 6.3' in ua:
+        os_name = 'Windows 8.1'
+    elif 'windows nt 6.1' in ua:
+        os_name = 'Windows 7'
+    elif 'windows' in ua:
+        os_name = 'Windows'
+    elif 'mac os x' in ua or 'macintosh' in ua:
+        os_name = 'macOS'
+    elif 'android' in ua:
+        os_name = 'Android'
+    elif 'iphone' in ua or 'ipad' in ua or 'ipod' in ua:
+        os_name = 'iOS'
+    elif 'linux' in ua:
+        os_name = 'Linux'
+
+    return browser, os_name
+
 # ------------------ 链接统计 ------------------
 @app.route('/stats/<short_code>')
 @login_required
@@ -867,18 +908,107 @@ def link_stats(short_code):
     cur.close()
     conn.close()
 
-    # 转换为字典列表，便于模板使用
-    clicks_list = [{
-        'ip': c[0],
-        'user_agent': c[1],
-        'accessed_at': c[2],
-        'referer': c[3],
-        'country': c[4] if len(c) > 4 else '',
-        'region': c[5] if len(c) > 5 else '',
-        'city': c[6] if len(c) > 6 else ''
-    } for c in clicks]
+    # 转换为字典列表，便于模板使用（统一 accessed_at 为 datetime 对象）
+    clicks_list = []
+    for c in clicks:
+        accessed = c[2]
+        if isinstance(accessed, str):
+            try:
+                accessed = datetime.strptime(accessed, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                try:
+                    accessed = datetime.fromisoformat(accessed)
+                except ValueError:
+                    accessed = None
+        clicks_list.append({
+            'ip': c[0],
+            'user_agent': c[1],
+            'accessed_at': accessed,
+            'referer': c[3],
+            'country': c[4] if len(c) > 4 else '',
+            'region': c[5] if len(c) > 5 else '',
+            'city': c[6] if len(c) > 6 else ''
+        })
 
-    return render_template('link_stats.html', short_code=short_code, long_url=long_url, clicks=clicks_list)
+    # ========== 分析数据计算 ==========
+
+    total_clicks = len(clicks_list)
+    now = datetime.now()
+
+    # 今日点击数（过去 24 小时）
+    today_cutoff = now - timedelta(hours=24)
+    today_clicks = sum(1 for c in clicks_list if c['accessed_at'] and c['accessed_at'] >= today_cutoff)
+
+    # 日点击趋势（最近 30 天）
+    daily_trend = {}
+    for c in clicks_list:
+        if c['accessed_at']:
+            date_key = c['accessed_at'].strftime('%Y-%m-%d')
+            daily_trend[date_key] = daily_trend.get(date_key, 0) + 1
+
+    # 填充最近 30 天（含无点击的日期）
+    trend_data = []
+    for i in range(29, -1, -1):
+        d = (now - timedelta(days=i)).strftime('%Y-%m-%d')
+        trend_data.append({'date': d, 'count': daily_trend.get(d, 0)})
+
+    # 来源域名分布
+    referer_domains = {}
+    for c in clicks_list:
+        ref = c['referer']
+        if not ref:
+            domain = 'direct'
+        else:
+            try:
+                domain = ref.split('/')[2] if '://' in ref else ref.split('/')[0]
+            except Exception:
+                domain = 'other'
+        referer_domains[domain] = referer_domains.get(domain, 0) + 1
+
+    referer_stats = sorted(
+        [{'domain': k, 'count': v} for k, v in referer_domains.items()],
+        key=lambda x: x['count'], reverse=True
+    )[:10]
+
+    # 浏览器 / OS 分布
+    browser_stats_raw = {}
+    os_stats_raw = {}
+    for c in clicks_list:
+        browser, os_name = parse_user_agent(c['user_agent'])
+        browser_stats_raw[browser] = browser_stats_raw.get(browser, 0) + 1
+        os_stats_raw[os_name] = os_stats_raw.get(os_name, 0) + 1
+
+    browser_stats = sorted(
+        [{'name': k, 'count': v} for k, v in browser_stats_raw.items()],
+        key=lambda x: x['count'], reverse=True
+    )
+    os_stats = sorted(
+        [{'name': k, 'count': v} for k, v in os_stats_raw.items()],
+        key=lambda x: x['count'], reverse=True
+    )
+
+    # 国家分布
+    country_stats_raw = {}
+    for c in clicks_list:
+        country = c['country'] if c['country'] else 'Unknown'
+        country_stats_raw[country] = country_stats_raw.get(country, 0) + 1
+
+    country_stats = sorted(
+        [{'name': k, 'count': v} for k, v in country_stats_raw.items()],
+        key=lambda x: x['count'], reverse=True
+    )[:10]
+
+    return render_template('link_stats.html',
+                         short_code=short_code,
+                         long_url=long_url,
+                         clicks=clicks_list,
+                         total_clicks=total_clicks,
+                         today_clicks=today_clicks,
+                         trend_data=trend_data,
+                         referer_stats=referer_stats,
+                         browser_stats=browser_stats,
+                         os_stats=os_stats,
+                         country_stats=country_stats)
 
 # ------------------ 错误页面 (三语) ------------------
 def render_error_page(message=None, key=None, status_code=400, **kwargs):

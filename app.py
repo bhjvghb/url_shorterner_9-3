@@ -265,8 +265,14 @@ def geolocate_ip(ip_address):
                            timeout=3)
         if resp.status_code == 200:
             data = resp.json()
+            # ip-api.com 在某些情况下会返回 "CN"/"China"，统一规范为主大陆表述
+            country_raw = data.get('country', '')
+            if country_raw in ('CN', 'China', '中国', '中華人民共和國', "People's Republic of China"):
+                country = 'Mainland China'
+            else:
+                country = country_raw
             return {
-                'country': data.get('country', ''),
+                'country': country,
                 'region': data.get('regionName', ''),
                 'city': data.get('city', '')
             }

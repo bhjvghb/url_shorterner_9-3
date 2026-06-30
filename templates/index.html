@@ -54,7 +54,7 @@
                     </div>
 
                     <div class="p-4">
-                        <form action="/shorten" method="POST">
+                        <form action="/shorten" method="POST" autocomplete="off">
                             <div class="mb-3">
                                 <label for="long_url" class="form-label fw-bold">{{ _('url_input_placeholder') }}</label>
                                 <input type="url"
@@ -62,6 +62,7 @@
                                        id="long_url"
                                        name="long_url"
                                        required
+                                       autocomplete="off"
                                        style="border: 2px solid #e9ecef; border-radius: 10px;">
                             </div>
 
@@ -77,6 +78,7 @@
                                        id="custom_code"
                                        name="custom_code"
                                        maxlength="20"
+                                       autocomplete="off"
                                        style="border: 2px solid #e9ecef; border-radius: 10px;">
                             </div>
 
@@ -91,6 +93,7 @@
                                        class="form-control"
                                        id="password"
                                        name="password"
+                                       autocomplete="new-password"
                                        style="border: 2px solid #e9ecef; border-radius: 10px;">
                             </div>
 

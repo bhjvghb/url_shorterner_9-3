@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinkSnap — UI Redesign Prototype</title>
+<style>
+/* ============================================================
+   DESIGN SYSTEM: Warm Editorial
+   A URL shortener reimagined with editorial elegance.
+   ============================================================ */
+
+/* --- CSS Custom Properties (Design Tokens) --- */
+:root {
+  /* Color — Surface */
+  --surface-base: #faf7f2;
+  --surface-card: #ffffff;
+  --surface-hover: #f5f0ea;
+  --surface-muted: #f0ebe4;
+
+  /* Color — Text */
+  --text-primary: #2d2a26;
+  --text-secondary: #78716c;
+  --text-muted: #a8a29e;
+  --text-inverse: #faf7f2;
+
+  /* Color — Accent (Terracotta) */
+  --accent: #d9704a;
+  --accent-hover: #c25a35;
+  --accent-light: #fdf0eb;
+  --accent-subtle: #faf4f0;
+
+  /* Color — Semantic */
+  --success: #7d9d6e;
+  --success-light: #eef5ea;
+  --warning: #d4a853;
+  --warning-light: #fdf6e8;
+  --error: #c75b39;
+  --error-light: #fdf0eb;
+  --info: #6b8fa3;
+  --info-light: #eef4f7;
+
+  /* Color — Border */
+  --border: #e8e4df;
+  --border-light: #f0ece7;
+
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "Consolas", monospace;
+
+  /* Font Sizes (fixed rem scale for app UI) */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 3rem;
+
+  /* Font Weights */
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Line Heights */
+  --leading-tight: 1.15;
+  --leading-snug: 1.35;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
+
+  /* Spacing (4pt base) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+
+  /* Border Radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.08);
+
+  /* Transitions */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+
+  /* Layout */
+  --container-max: 1100px;
+  --container-narrow: 480px;
+}
+
+/* --- Reset & Base --- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--text-primary);
+  background: var(--surface-base);
+  min-height: 100vh;
+}
+
+/* --- Typography --- */
+h1, h2, h3, h4 {
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+h1 { font-size: var(--text-4xl); }
+h2 { font-size: var(--text-3xl); }
+h3 { font-size: var(--text-2xl); }
+h4 { font-size: var(--text-xl); }
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+a:hover { color: var(--accent-hover); }
+
+/* --- Layout Utilities --- */
+.container {
+  width: 100%;
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+}
+
+.container-narrow {
+  width: 100%;
+  max-width: var(--container-narrow);
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+}
+
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.gap-2 { gap: var(--space-2); }
+.gap-3 { gap: var(--space-3); }
+.gap-4 { gap: var(--space-4); }
+.gap-6 { gap: var(--space-6); }
+.gap-8 { gap: var(--space-8); }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+/* --- Components --- */
+
+/* Header / Nav */
+.header {
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-4) 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+  text-decoration: none;
+}
+
+.logo-mark {
+  width: 36px;
+  height: 36px;
+  background: var(--accent);
+  color: white;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: var(--weight-bold);
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0.625rem 1.25rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  white-space: nowrap;
+  text-decoration: none;
+}
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+.btn-primary:hover { background: var(--accent-hover); }
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.btn-ghost:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.btn-danger {
+  background: var(--error);
+  color: white;
+}
+.btn-danger:hover { background: #b04a2c; }
+
+.btn-success {
+  background: var(--success);
+  color: white;
+}
+.btn-success:hover { background: #6b8a5d; }
+
+.btn-lg {
+  padding: 0.875rem 2rem;
+  font-size: var(--text-base);
+}
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: var(--text-xs);
+}
+
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+
+/* Form Controls */
+.form-group { margin-bottom: var(--space-5); }
+
+.form-label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.form-input::placeholder { color: var(--text-muted); }
+.form-input:hover { border-color: var(--text-muted); }
+.form-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px oklch(60% 0.1 30 / 0.12);
+}
+
+.form-input-lg {
+  padding: 1rem 1.25rem;
+  font-size: var(--text-lg);
+}
+
+.form-select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2378716c' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  padding-right: 2.5rem;
+}
+.form-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px oklch(60% 0.1 30 / 0.12);
+}
+
+.form-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.form-check input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.form-inline {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.form-inline .form-input { flex: 1; }
+
+/* Cards */
+.card {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+}
+
+/* Alert / Message */
+.alert {
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+}
+.alert-success {
+  background: var(--success-light);
+  color: #4a6b3a;
+  border: 1px solid oklch(70% 0.05 140 / 0.3);
+}
+.alert-error {
+  background: var(--error-light);
+  color: var(--error);
+  border: 1px solid oklch(55% 0.1 30 / 0.2);
+}
+.alert-info {
+  background: var(--info-light);
+  color: #3d6375;
+  border: 1px solid oklch(65% 0.05 230 / 0.2);
+}
+.alert-warning {
+  background: var(--warning-light);
+  color: #8a6d20;
+  border: 1px solid oklch(70% 0.08 85 / 0.3);
+}
+
+/* Badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  border-radius: 100px;
+  line-height: 1.6;
+}
+.badge-accent { background: var(--accent-light); color: var(--accent); }
+.badge-success { background: var(--success-light); color: #4a6b3a; }
+.badge-warning { background: var(--warning-light); color: #8a6d20; }
+.badge-neutral { background: var(--surface-muted); color: var(--text-secondary); }
+
+/* Divider */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--space-6) 0;
+}
+.divider-light { border-color: var(--border-light); }
+
+/* Code inline */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--surface-muted);
+  padding: 0.15em 0.4em;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+}
+
+/* URL Display */
+.url-display {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface-muted);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  word-break: break-all;
+}
+.url-display a { color: var(--accent); }
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+.stat-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  text-align: center;
+}
+
+.stat-number {
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+  margin-bottom: var(--space-2);
+}
+.stat-number.accent { color: var(--accent); }
+
+.stat-label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* Table */
+.table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+}
+
+thead {
+  background: var(--surface-muted);
+}
+
+th {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+}
+
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface-hover); }
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  margin-top: var(--space-6);
+}
+
+.page-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.page-link:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.page-link.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: var(--space-6);
+  animation: fadeIn var(--duration-fast) var(--ease-out);
+}
+
+.modal {
+  background: var(--surface-card);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 500px;
+  box-shadow: var(--shadow-lg);
+  animation: slideUp var(--duration-normal) var(--ease-out);
+}
+
+.modal-header {
+  padding: var(--space-6) var(--space-6) 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-header h3 { font-size: var(--text-xl); }
+
+.modal-body { padding: var(--space-6); }
+
+.modal-footer {
+  padding: 0 var(--space-6) var(--space-6);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* Tooltip */
+.tooltip {
+  position: relative;
+  cursor: pointer;
+}
+.tooltip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text-primary);
+  color: var(--text-inverse);
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.tooltip:hover::after { opacity: 1; }
+
+/* Toast notification */
+.toast {
+  position: fixed;
+  bottom: var(--space-6);
+  right: var(--space-6);
+  background: var(--text-primary);
+  color: var(--text-inverse);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-lg);
+  z-index: 300;
+  animation: slideUp var(--duration-normal) var(--ease-out);
+}
+
+/* QR Code card */
+.qr-card {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.qr-card img {
+  width: 160px;
+  height: 160px;
+  border-radius: var(--radius-sm);
+}
+
+/* Search bar */
+.search-bar {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+.search-bar .form-input {
+  max-width: 260px;
+}
+.search-bar .form-select {
+  max-width: 180px;
+}
+
+/* Tag */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.125rem 0.625rem;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  border-radius: 100px;
+}
+
+/* Copy feedback */
+.copy-feedback {
+  position: fixed;
+  top: var(--space-6);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text-primary);
+  color: var(--text-inverse);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  z-index: 300;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+  pointer-events: none;
+}
+.copy-feedback.show {
+  opacity: 1;
+  animation: fadeIn var(--duration-fast) var(--ease-out);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Page layout */
+.page {
+  display: none;
+  padding: var(--space-12) 0;
+  animation: fadeIn var(--duration-normal) var(--ease-out);
+}
+.page.active { display: block; }
+
+/* Auth pages (login/register) — centered vertically */
+.auth-page {
+  display: none;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+}
+.auth-page.active { display: flex; }
+
+/* Hero section for index */
+.hero {
+  text-align: center;
+  margin-bottom: var(--space-12);
+}
+.hero h1 {
+  font-size: var(--text-5xl);
+  margin-bottom: var(--space-4);
+}
+.hero p {
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+  max-width: 540px;
+  margin: 0 auto;
+  line-height: var(--leading-relaxed);
+}
+
+/* Shorten form card */
+.shorten-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  max-width: 640px;
+  margin: 0 auto;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Options row */
+.options-row {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.options-row .form-group { flex: 1; min-width: 140px; }
+
+/* Toggle section */
+.toggle-section {
+  display: none;
+  margin-bottom: var(--space-4);
+  animation: slideUp var(--duration-fast) var(--ease-out);
+}
+.toggle-section.open { display: block; }
+
+/* Feature list */
+.feature-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-6);
+  margin-top: var(--space-10);
+}
+.feature-item {
+  padding: var(--space-5);
+  text-align: center;
+}
+.feature-icon {
+  font-size: 1.5rem;
+  margin-bottom: var(--space-3);
+  display: block;
+}
+.feature-item h4 {
+  font-size: var(--text-base);
+  margin-bottom: var(--space-2);
+}
+.feature-item p {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: var(--space-16) var(--space-6);
+}
+.empty-state .empty-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-4);
+  display: block;
+  opacity: 0.4;
+}
+.empty-state h3 {
+  font-size: var(--text-xl);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+.empty-state p {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Section title bar */
+.section-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+}
+.section-bar h2 { font-size: var(--text-2xl); }
+
+/* Language switcher */
+.lang-switcher {
+  display: flex;
+  gap: var(--space-1);
+}
+.lang-switcher button {
+  padding: 0.25rem 0.5rem;
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.lang-switcher button:hover { color: var(--text-primary); background: var(--surface-hover); }
+.lang-switcher button.active { color: var(--accent); }
+
+/* Link text in table */
+.link-cell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Chart placeholder */
+.chart-placeholder {
+  background: var(--surface-muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  :root {
+    --text-5xl: 2.25rem;
+    --text-4xl: 1.875rem;
+    --text-3xl: 1.5rem;
+  }
+  .header-inner { flex-wrap: wrap; gap: var(--space-3); }
+  .nav-links { width: 100%; justify-content: flex-end; }
+  .shorten-card { padding: var(--space-5); }
+  .card { padding: var(--space-5); }
+  .options-row { flex-direction: column; }
+  .search-bar { flex-direction: column; align-items: stretch; }
+  .search-bar .form-input, .search-bar .form-select { max-width: none; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Link stats layout */
+.stats-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+@media (max-width: 768px) {
+  .stats-layout { grid-template-columns: 1fr; }
+}
+
+/* Action row in table */
+.action-group {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+/* Success page */
+.success-icon {
+  font-size: 4rem;
+  display: block;
+  margin-bottom: var(--space-4);
+}
+
+/* Terracotta gradient accent bar */
+.accent-bar {
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), #e8a87c, var(--accent));
+  border-radius: 2px;
+  margin-bottom: var(--space-6);
+}
+
+/* University Affiliation Badge */
+.affiliation {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  margin-bottom: var(--space-8);
+}
+.affiliation img {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+}
+.affiliation-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+.affiliation-text .uni {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.affiliation-text .dept {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}
+
+/* Subtle top border on cards for hierarchy */
+.card-accent-top {
+  border-top: 3px solid var(--accent);
+}
+</style>
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<header class="header">
+  <div class="header-inner">
+    <a href="#" class="logo" onclick="showPage('index')">
+      <span class="logo-mark">L</span>
+      LinkSnap
+    </a>
+    <nav class="nav-links">
+      <div class="lang-switcher">
+        <button class="active">EN</button>
+        <button>中文</button>
+        <button>粵語</button>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="showPage('dashboard')">Dashboard</button>
+      <button class="btn btn-ghost btn-sm" onclick="showPage('login')">Sign In</button>
+      <button class="btn btn-primary btn-sm" onclick="showPage('register')">Register</button>
+    </nav>
+  </div>
+</header>
+
+<!-- ===== COPY FEEDBACK ===== -->
+<div class="copy-feedback" id="copyFeedback">Copied to clipboard!</div>
+
+<!-- ============================================================
+     PAGE: LOGIN
+     ============================================================ -->
+<div class="auth-page active" id="page-login">
+  <div class="container-narrow">
+    <div class="card">
+      <div class="text-center" style="margin-bottom: var(--space-8);">
+        <span class="logo-mark" style="margin: 0 auto var(--space-4);">L</span>
+        <h2 style="margin-bottom: var(--space-2);">Welcome back</h2>
+        <p style="color: var(--text-secondary); font-size: var(--text-sm);">
+          Sign in to manage your shortened links
+        </p>
+      </div>
+
+      <form onsubmit="event.preventDefault(); showPage('index');">
+        <div class="form-group">
+          <label class="form-label" for="login-username">Username or Email</label>
+          <input type="text" class="form-input" id="login-username" value="demo@example.com" required autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="login-password">Password</label>
+          <input type="password" class="form-input" id="login-password" value="••••••••" required autocomplete="current-password">
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-6);">
+          <label class="form-check">
+            <input type="checkbox"> Remember me
+          </label>
+          <a href="#" style="font-size: var(--text-sm);" onclick="showPage('forgotPassword')">Forgot password?</a>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">Sign In</button>
+      </form>
+
+      <p class="text-center" style="margin-top: var(--space-6); font-size: var(--text-sm); color: var(--text-secondary);">
+        Don't have an account?
+        <a href="#" onclick="showPage('register')">Create one</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE: REGISTER
+     ============================================================ -->
+<div class="auth-page" id="page-register">
+  <div class="container-narrow">
+    <div class="card">
+      <div class="text-center" style="margin-bottom: var(--space-8);">
+        <span class="logo-mark" style="margin: 0 auto var(--space-4);">L</span>
+        <h2 style="margin-bottom: var(--space-2);">Create your account</h2>
+        <p style="color: var(--text-secondary); font-size: var(--text-sm);">
+          Start shortening links in seconds
+        </p>
+      </div>
+
+      <form onsubmit="event.preventDefault(); showPage('login');">
+        <div class="form-group">
+          <label class="form-label" for="reg-username">Username</label>
+          <input type="text" class="form-input" id="reg-username" placeholder="Choose a username" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="reg-email">Email</label>
+          <input type="email" class="form-input" id="reg-email" placeholder="you@example.com" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="reg-password">Password</label>
+          <input type="password" class="form-input" id="reg-password" placeholder="At least 6 characters" required minlength="6">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="reg-confirm">Confirm Password</label>
+          <input type="password" class="form-input" id="reg-confirm" placeholder="Re-enter your password" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">Create Account</button>
+      </form>
+
+      <p class="text-center" style="margin-top: var(--space-6); font-size: var(--text-sm); color: var(--text-secondary);">
+        Already have an account?
+        <a href="#" onclick="showPage('login')">Sign in</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE: FORGOT PASSWORD
+     ============================================================ -->
+<div class="auth-page" id="page-forgotPassword">
+  <div class="container-narrow">
+    <div class="card">
+      <div class="text-center" style="margin-bottom: var(--space-8);">
+        <span class="logo-mark" style="margin: 0 auto var(--space-4);">L</span>
+        <h2 style="margin-bottom: var(--space-2);">Reset your password</h2>
+        <p style="color: var(--text-secondary); font-size: var(--text-sm);">
+          Enter your email and we'll send you a reset link
+        </p>
+      </div>
+
+      <form onsubmit="event.preventDefault(); showPage('login');">
+        <div class="form-group">
+          <label class="form-label" for="reset-email">Email</label>
+          <input type="email" class="form-input" id="reset-email" placeholder="you@example.com" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">Send Reset Link</button>
+      </form>
+
+      <p class="text-center" style="margin-top: var(--space-6); font-size: var(--text-sm);">
+        <a href="#" onclick="showPage('login')">Back to sign in</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE: INDEX (SHORTEN FORM) — Logged in
+     ============================================================ -->
+<div class="page" id="page-index">
+  <div class="container">
+    <div class="hero">
+      <!-- University Affiliation -->
+      <div class="affiliation">
+        <img src="static/hku-ece-logo.png" alt="HKU ECE Logo" onerror="this.style.display='none'">
+        <div class="affiliation-text">
+          <span class="uni">A project of</span>
+          <span class="dept">The University of Hong Kong &mdash; ECE</span>
+        </div>
+      </div>
+
+      <h1>Short links,<br>big impact.</h1>
+      <p>Create memorable, trackable short links in seconds. With custom codes, QR codes, and detailed analytics.</p>
+    </div>
+
+    <div class="shorten-card">
+      <div class="accent-bar"></div>
+
+      <!-- URL Input -->
+      <div class="form-group">
+        <label class="form-label" for="long-url">Paste your long URL</label>
+        <input type="url" class="form-input form-input-lg" id="long-url"
+               placeholder="https://example.com/very/long/url/that-needs-shortening"
+               autocomplete="off" required>
+      </div>
+
+      <!-- Options Row -->
+      <div class="options-row">
+        <div class="form-group">
+          <label class="form-label" for="expiry">Expires in</label>
+          <select class="form-select" id="expiry">
+            <option value="forever">Forever</option>
+            <option value="1d">1 Day</option>
+            <option value="7d">7 Days</option>
+            <option value="30d">30 Days</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">&nbsp;</label>
+          <label class="form-check" style="margin-top: 0.5rem;">
+            <input type="checkbox" id="toggleCustom" onchange="toggleSection('customSection')">
+            Custom short code
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="form-label">&nbsp;</label>
+          <label class="form-check" style="margin-top: 0.5rem;">
+            <input type="checkbox" id="togglePassword" onchange="toggleSection('passwordSection')">
+            Password protect
+          </label>
+        </div>
+      </div>
+
+      <!-- Custom Code Toggle -->
+      <div class="toggle-section" id="customSection">
+        <div class="form-group">
+          <label class="form-label" for="custom-code">Your custom code</label>
+          <div class="form-inline">
+            <span style="display: flex; align-items: center; padding: 0.75rem 0.5rem 0.75rem 1rem; background: var(--surface-muted); border: 1px solid var(--border); border-right: none; border-radius: var(--radius-md) 0 0 var(--radius-md); font-size: var(--text-sm); color: var(--text-muted);">linksnap.com/</span>
+            <input type="text" class="form-input" id="custom-code"
+                   placeholder="my-link" maxlength="20"
+                   style="border-radius: 0 var(--radius-md) var(--radius-md) 0;"
+                   autocomplete="off">
+          </div>
+          <p style="font-size: var(--text-xs); color: var(--text-muted); margin-top: var(--space-2);">
+            3-20 characters, letters, numbers, hyphens, underscores
+          </p>
+        </div>
+      </div>
+
+      <!-- Password Toggle -->
+      <div class="toggle-section" id="passwordSection">
+        <div class="form-group">
+          <label class="form-label" for="link-password">Access password</label>
+          <input type="password" class="form-input" id="link-password"
+                 placeholder="Set a password for this link"
+                 autocomplete="new-password">
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-lg" style="width: 100%; margin-top: var(--space-2);"
+              onclick="showPage('success')">
+        Shorten URL
+      </button>
+    </div>
+
+    <!-- Features -->
+    <div class="feature-list" style="margin-top: var(--space-12);">
+      <div class="feature-item">
+        <span class="feature-icon">&#9889;</span>
+        <h4>Instant Shortening</h4>
+        <p>Paste a URL, get a short link in milliseconds. No waiting, no limits.</p>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">&#128273;</span>
+        <h4>Custom Codes</h4>
+        <p>Create branded, memorable short links with your own custom slugs.</p>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">&#128202;</span>
+        <h4>Click Analytics</h4>
+        <p>Track every click with geolocation, browser stats, and daily trend charts.</p>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">&#128274;</span>
+        <h4>Password Protection</h4>
+        <p>Add an extra layer of security with password-protected short links.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE: SUCCESS
+     ============================================================ -->
+<div class="page" id="page-success">
+  <div class="container">
+    <div class="card card-accent-top" style="max-width: 700px; margin: 0 auto; text-align: center;">
+      <span class="success-icon">&#10003;</span>
+      <h2 style="margin-bottom: var(--space-2);">Link Created!</h2>
+      <p style="color: var(--text-secondary); margin-bottom: var(--space-8);">
+        Your short link is ready to share
+        <span class="badge badge-accent" style="margin-left: var(--space-2);">Custom</span>
+      </p>
+
+      <!-- Original URL -->
+      <div style="text-align: left; margin-bottom: var(--space-4);">
+        <label class="form-label">Original URL</label>
+        <div class="url-display" style="justify-content: space-between;">
+          <span style="color: var(--text-secondary);">https://example.com/very/long/url/that-needs-shortening</span>
+        </div>
+      </div>
+
+      <!-- Short URL -->
+      <div style="text-align: left; margin-bottom: var(--space-6);">
+        <label class="form-label">Short URL</label>
+        <div class="url-display" style="justify-content: space-between; background: var(--accent-light); border: 1px solid oklch(65% 0.1 30 / 0.2);">
+          <a href="#" style="font-weight: var(--weight-semibold); font-size: var(--text-base);">linksnap.com/my-link</a>
+          <button class="btn btn-ghost btn-sm" onclick="copyText('linksnap.com/my-link')" style="flex-shrink: 0;">
+            Copy
+          </button>
+        </div>
+      </div>
+
+      <!-- QR Code -->
+      <div style="margin-bottom: var(--space-8);">
+        <label class="form-label">Scan QR Code</label>
+        <div class="qr-card" style="margin: 0 auto;">
+          <div style="width: 160px; height: 160px; background: var(--surface-muted); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: var(--text-xs);">
+            QR Code
+          </div>
+          <button class="btn btn-ghost btn-sm">Download PNG</button>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div style="display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap;">
+        <button class="btn btn-primary btn-lg" onclick="copyText('linksnap.com/my-link')">Copy Link</button>
+        <button class="btn btn-secondary btn-lg" onclick="window.open('#', '_blank')">Test Link</button>
+        <button class="btn btn-ghost btn-lg" onclick="showPage('index')">Shorten Another</button>
+      </div>
+
+      <!-- Link info -->
+      <hr class="divider">
+      <div style="display: flex; gap: var(--space-8); justify-content: center; flex-wrap: wrap; font-size: var(--text-sm); color: var(--text-secondary);">
+        <div>Code: <code>my-link</code></div>
+        <div>Type: <span class="badge badge-accent">Custom</span></div>
+        <div>Expires: <span class="badge badge-neutral">Forever</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE: DASHBOARD
+     ============================================================ -->
+<div class="page" id="page-dashboard">
+  <div class="container">
+
+    <div class="section-bar">
+      <h2>My Links</h2>
+      <div style="display: flex; gap: var(--space-3);">
+        <a href="#" class="btn btn-ghost btn-sm" onclick="showPage('index')">Home</a>
+        <a href="#" class="btn btn-ghost btn-sm" style="color: var(--error);" onclick="showPage('login')">Sign Out</a>
+      </div>
+    </div>
+
+    <!-- Stats Summary -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number accent">24</div>
+        <div class="stat-label">Total Links</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">8</div>
+        <div class="stat-label">Custom Codes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">1,247</div>
+        <div class="stat-label">Total Clicks</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">3</div>
+        <div class="stat-label">Expiring Soon</div>
+      </div>
+    </div>
+
+    <!-- Search & Filter -->
+    <div class="search-bar">
+      <input type="text" class="form-input" placeholder="Search links or URLs..." id="dashboardSearch">
+      <select class="form-select" id="dashboardTag">
+        <option value="">All Tags</option>
+        <option>marketing</option>
+        <option>social</option>
+        <option>docs</option>
+        <option>personal</option>
+      </select>
+      <button class="btn btn-secondary btn-sm">Search</button>
+      <button class="btn btn-ghost btn-sm">Clear</button>
+      <span style="margin-left: auto; font-size: var(--text-sm); color: var(--text-muted);">24 links</span>
+    </div>
+
+    <!-- Links Table -->
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Short Code</th>
+            <th>Short URL</th>
+            <th>Original URL</th>
+            <th>Tag</th>
+            <th>Clicks</th>
+            <th>Created</th>
+            <th>Expires</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <code>my-link</code>
+              <span class="badge badge-warning" style="margin-left: 4px;">&#128274;</span>
+            </td>
+            <td>
+              <span class="link-cell">linksnap.com/my-link</span>
+              <button class="btn btn-ghost btn-sm" style="padding: 0 4px; font-size: 11px;" onclick="copyText('linksnap.com/my-link')">Copy</button>
+            </td>
+            <td><span class="link-cell" title="https://example.com/very/long/url">https://example.com/very/long/url</span></td>
+            <td><span class="tag">marketing</span></td>
+            <td>342</td>
+            <td>2025-06-15</td>
+            <td>Forever</td>
+            <td><span class="badge badge-success">Active</span></td>
+            <td>
+              <div class="action-group">
+                <a href="#" class="btn btn-ghost btn-sm" onclick="showPage('stats'); return false;">Stats</a>
+                <button class="btn btn-ghost btn-sm">Edit</button>
+                <button class="btn btn-ghost btn-sm">Tag</button>
+                <button class="btn btn-ghost btn-sm" style="color: var(--error);">Delete</button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td><code>xK9mP2</code></td>
+            <td>
+              <span class="link-cell">linksnap.com/xK9mP2</span>
+              <button class="btn btn-ghost btn-sm" style="padding: 0 4px; font-size: 11px;" onclick="copyText('linksnap.com/xK9mP2')">Copy</button>
+            </td>
+            <td><span class="link-cell">https://docs.google.com/document/d/abc123...</span></td>
+            <td><span class="tag">docs</span></td>
+            <td>89</td>
+            <td>2025-06-18</td>
+            <td>2025-07-18</td>
+            <td><span class="badge badge-success">Active</span></td>
+            <td>
+              <div class="action-group">
+                <a href="#" class="btn btn-ghost btn-sm" onclick="showPage('stats'); return false;">Stats</a>
+                <button class="btn btn-ghost btn-sm">Edit</button>
+                <button class="btn btn-ghost btn-sm">Extend</button>
+                <button class="btn btn-ghost btn-sm" style="color: var(--error);">Delete</button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td><code>summer-sale</code></td>
+            <td>
+              <span class="link-cell">linksnap.com/summer-sale</span>
+              <button class="btn btn-ghost btn-sm" style="padding: 0 4px; font-size: 11px;" onclick="copyText('linksnap.com/summer-sale')">Copy</button>
+            </td>
+            <td><span class="link-cell">https://shop.example.com/summer-sale-2025</span></td>
+            <td><span class="tag">marketing</span></td>
+            <td>1,024</td>
+            <td>2025-06-01</td>
+            <td>2025-06-28</td>
+            <td><span class="badge" style="background: var(--error-light); color: var(--error);">Expired</span></td>
+            <td>
+              <div class="action-group">
+                <a href="#" class="btn btn-ghost btn-sm" onclick="showPage('stats'); return false;">Stats</a>
+                <button class="btn btn-ghost btn-sm">Edit</button>
+                <button class="btn btn-ghost btn-sm" style="color: var(--error);">Delete</button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Rn7tQ3</code></td>
+            <td>
+              <span class="link-cell">linksnap.com/Rn7tQ3</span>
+              <button class="btn btn-ghost btn-sm" style="padding: 0 4px; font-size: 11px;" onclick="copyText('linksnap.com/Rn7tQ3')">Copy</button>
+            </td>
+            <td><span class="link-cell">https://github.com/user/repo/pull/1234</span></td>
+            <td>-</td>
+            <td>5</td>
+            <td>2025-06-20</td>
+            <td>Forever</td>
+            <td><span class="badge badge-success">Active</span></td>
+            <td>
+              <div class="action-group">
+                <a href="#" class="btn btn-ghost btn-sm" onclick="showPage('stats'); return false;">Stats</a>
+                <button class="btn btn-ghost btn-sm">Edit</button>
+                <button class="btn btn-ghost btn-sm" style="color: var(--error);">Delete</button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination">
+      <span class="page-link" style="opacity: 0.4;">Prev</span>
+      <span class="page-link active">1</span>
+      <span class="page-link">2</span>
+      <span class="page-link">3</span>
+      <span class="page-link">Next</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE: LINK STATS (ANALYTICS)
+     ============================================================ -->
+<div class="page" id="page-stats">
+  <div class="container">
+    <div class="section-bar">
+      <div>
+        <h2>Link Statistics</h2>
+        <p style="color: var(--text-secondary); font-size: var(--text-sm); margin-top: var(--space-1);">
+          <code>my-link</code> &rarr; linksnap.com/my-link
+        </p>
+      </div>
+      <div style="display: flex; gap: var(--space-3);">
+        <button class="btn btn-ghost btn-sm" onclick="showPage('dashboard')">Back to Dashboard</button>
+        <button class="btn btn-ghost btn-sm" onclick="showPage('index')">Home</button>
+      </div>
+    </div>
+
+    <!-- Stats Overview -->
+    <div class="stats-grid">
+      <div class="stat-card" style="border-left: 3px solid var(--accent);">
+        <div class="stat-number accent">342</div>
+        <div class="stat-label">Total Clicks</div>
+      </div>
+      <div class="stat-card" style="border-left: 3px solid var(--success);">
+        <div class="stat-number" style="color: var(--success);">12</div>
+        <div class="stat-label">Today</div>
+      </div>
+      <div class="stat-card" style="border-left: 3px solid var(--warning);">
+        <div class="stat-number" style="color: var(--warning);">google.com</div>
+        <div class="stat-label">Top Referrer</div>
+      </div>
+      <div class="stat-card" style="border-left: 3px solid var(--info);">
+        <div class="stat-number" style="color: var(--info); font-size: 1.5rem;">Chrome</div>
+        <div class="stat-label">Top Browser</div>
+      </div>
+    </div>
+
+    <!-- Charts Area -->
+    <div class="stats-layout">
+      <div class="card">
+        <h4 style="margin-bottom: var(--space-4);">Daily Click Trend</h4>
+        <div class="chart-placeholder" style="height: 260px; display: flex; align-items: center; justify-content: center;">
+          <div>
+            <span style="font-size: 2rem; display: block; margin-bottom: var(--space-2);">&#128200;</span>
+            Chart.js line chart — 30-day click trend
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h4 style="margin-bottom: var(--space-4);">Source Analysis</h4>
+        <div class="chart-placeholder" style="height: 260px; display: flex; align-items: center; justify-content: center;">
+          <div>
+            <span style="font-size: 2rem; display: block; margin-bottom: var(--space-2);">&#128201;</span>
+            Chart.js doughnut — referrer distribution
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-layout">
+      <div class="card">
+        <h4 style="margin-bottom: var(--space-4);">Browser Distribution</h4>
+        <div class="chart-placeholder" style="height: 260px; display: flex; align-items: center; justify-content: center;">
+          <div>
+            <span style="font-size: 2rem; display: block; margin-bottom: var(--space-2);">&#127760;</span>
+            Chart.js bar chart — browser breakdown
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h4 style="margin-bottom: var(--space-4);">Top Countries</h4>
+        <div class="chart-placeholder" style="height: 260px; display: flex; align-items: center; justify-content: center;">
+          <div>
+            <span style="font-size: 2rem; display: block; margin-bottom: var(--space-2);">&#127758;</span>
+            Chart.js horizontal bar — country distribution
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Click Detail Table -->
+    <div class="card" style="margin-top: var(--space-6);">
+      <h4 style="margin-bottom: var(--space-5);">Recent Clicks</h4>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>IP Address</th>
+              <th>Location</th>
+              <th>Browser / OS</th>
+              <th>Referrer</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2025-07-02 10:32:15</td>
+              <td>192.168.1.100</td>
+              <td>Beijing, China</td>
+              <td>Chrome / Windows</td>
+              <td>google.com</td>
+            </tr>
+            <tr>
+              <td>2025-07-02 09:15:42</td>
+              <td>203.0.113.45</td>
+              <td>Hong Kong, China</td>
+              <td>Safari / macOS</td>
+              <td>Direct</td>
+            </tr>
+            <tr>
+              <td>2025-07-02 08:01:33</td>
+              <td>198.51.100.22</td>
+              <td>Shanghai, China</td>
+              <td>Firefox / Linux</td>
+              <td>twitter.com</td>
+            </tr>
+            <tr>
+              <td>2025-07-01 22:45:10</td>
+              <td>172.16.0.50</td>
+              <td>Guangzhou, China</td>
+              <td>Edge / Windows</td>
+              <td>weixin.qq.com</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== PAGE NAVIGATION =====
+function showPage(pageName) {
+  // Hide all pages
+  document.querySelectorAll('.page, .auth-page').forEach(p => p.classList.remove('active'));
+  // Show target
+  const target = document.getElementById('page-' + pageName);
+  if (target) target.classList.add('active');
+
+  // Scroll to top
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ===== TOGGLE SECTIONS =====
+function toggleSection(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('open');
+}
+
+// ===== COPY TO CLIPBOARD =====
+function copyText(text) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => showCopyFeedback());
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showCopyFeedback();
+  }
+}
+
+function showCopyFeedback() {
+  const fb = document.getElementById('copyFeedback');
+  fb.classList.add('show');
+  setTimeout(() => fb.classList.remove('show'), 1800);
+}
+
+// ===== START ON INDEX (logged-in view) =====
+showPage('index');
+</script>
+</body>
+</html>

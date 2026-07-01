@@ -1,55 +1,17 @@
 <div class="lang-switcher">
     <form id="lang-form" method="POST" action="/set-lang" style="display:inline;">
         <input type="hidden" name="next" value="{{ request.path }}">
-        <div class="btn-group lang-btn-group" role="group" aria-label="{{ _('language') }}">
-            {% for loc in supported_locales %}
-            <button type="submit"
-                    name="lang"
-                    value="{{ loc }}"
-                    class="btn btn-sm lang-btn{% if g.locale == loc %} active{% endif %}"
-                    title="{{ locale_names[loc] }}">
-                {% if loc == 'zh-CN' %}简
-                {% elif loc == 'en' %}EN
-                {% elif loc == 'zh-HK' %}粵
-                {% endif %}
-            </button>
-            {% endfor %}
-        </div>
+        {% for loc in supported_locales %}
+        <button type="submit"
+                name="lang"
+                value="{{ loc }}"
+                class="lang-btn{% if g.locale == loc %} active{% endif %}"
+                title="{{ locale_names[loc] }}">
+            {% if loc == 'zh-CN' %}简
+            {% elif loc == 'en' %}EN
+            {% elif loc == 'zh-HK' %}粵
+            {% endif %}
+        </button>
+        {% endfor %}
     </form>
 </div>
-
-<style>
-.lang-switcher {
-    display: inline-flex;
-    align-items: center;
-}
-
-.lang-btn-group {
-    border-radius: 20px;
-    overflow: hidden;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-}
-
-.lang-btn {
-    border: 1px solid #dee2e6;
-    background: #fff;
-    color: #6c757d;
-    padding: 4px 12px;
-    font-size: 12px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    min-width: 36px;
-}
-
-.lang-btn:hover {
-    background: #f0f0ff;
-    color: #667eea;
-}
-
-.lang-btn.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: #fff;
-    border-color: transparent;
-    font-weight: 600;
-}
-</style>

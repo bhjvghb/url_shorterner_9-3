@@ -4,142 +4,162 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ _('admin_dashboard') }} - {{ _('site_title') }}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background: #f8f9fa; padding: 20px; }
-        .stat-card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; text-align: center; }
-        .table-container { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
-        .nav-tabs { margin-bottom: 20px; }
-        .nav-right { display: flex; align-items: center; gap: 8px; }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h1>{{ _('admin_dashboard') }}</h1>
-            <div class="nav-right">
-                {% include '_lang_switcher.html' %}
-                <a href="/" class="btn btn-outline-primary btn-sm">{{ _('back_home') }}</a>
-                <a href="/logout" class="btn btn-outline-danger btn-sm">{{ _('logout') }}</a>
-            </div>
-        </div>
 
-        <ul class="nav nav-tabs" id="adminTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats" type="button" role="tab">{{ _('system_overview') }}</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="links-tab" data-bs-toggle="tab" data-bs-target="#links" type="button" role="tab">{{ _('recent_urls') }}</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab">{{ _('user_management') }}</button>
-            </li>
-        </ul>
-
-        <div class="tab-content">
-            <div class="tab-pane fade show active" id="stats" role="tabpanel">
-                <div class="row mt-4">
-                    <div class="col-md-3">
-                        <div class="stat-card"><h3>{{ total_urls }}</h3><p class="text-muted">{{ _('total_urls') }}</p></div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stat-card"><h3>{{ custom_urls }}</h3><p class="text-muted">{{ _('custom_urls') }}</p></div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stat-card"><h3>{{ total_clicks }}</h3><p class="text-muted">{{ _('total_clicks') }}</p></div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stat-card"><h3><a href="/">{{ _('site_title') }}</a></h3><p class="text-muted">{{ _('back_home') }}</p></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="tab-pane fade" id="links" role="tabpanel">
-                <div class="table-container mt-4">
-                    <h4>{{ _('recent_urls') }}</h4>
-                    <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>{{ _('short_code_info') }}</th>
-                                    <th>{{ _('original_url') }}</th>
-                                    <th>{{ _('type_label') }}</th>
-                                    <th>{{ _('created') }}</th>
-                                    <th>{{ _('clicks') }}</th>
-                                    <th>{{ _('expiry_label_info') }}</th>
-                                    <th>{{ _('actions') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for url in recent_urls %}
-                                <tr>
-                                    <td>{{ url[0] }}</td>
-                                    <td><code>{{ url[1] }}</code></td>
-                                    <td><a href="{{ url[2] }}" target="_blank">{{ url[2][:50] }}...</a></td>
-                                    <td>{{ _('custom_type') if url[3] else _('system_generated_type') }}</td>
-                                    <td class="local-time" data-utc="{{ url[4] }}">{{ url[4] }}</td>
-                                    <td>{{ url[5] }}</td>
-                                    <td class="local-time" data-utc="{{ url[6] }}">{{ url[6] if url[6] else _('permanent') }}</td>
-                                    <td>
-                                        <form action="/admin/link/{{ url[0] }}/delete" method="POST" style="display:inline;">
-                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('{{ _('confirm_delete_link') }}')">{{ _('delete') }}</button>
-                                        </form>
-                                        <a href="/stats/{{ url[1] }}" class="btn btn-sm btn-info">{{ _('stats') }}</a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div class="tab-pane fade" id="users" role="tabpanel">
-                <div class="table-container mt-4">
-                    <h4>{{ _('user_management') }}</h4>
-                    <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>{{ _('username') }}</th>
-                                    <th>{{ _('email') }}</th>
-                                    <th>{{ _('created') }}</th>
-                                    <th>{{ _('actions') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for user in users %}
-                                <tr>
-                                    <td>{{ user[0] }}</td>
-                                    <td>{{ user[1] }}</td>
-                                    <td>{{ user[2] }}</td>
-                                    <td class="local-time" data-utc="{{ user[3] }}">{{ user[3] }}</td>
-                                    <td>
-                                        <form action="/admin/user/{{ user[0] }}/delete" method="POST" style="display:inline;">
-                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('{{ _('confirm_delete_user') }}')">{{ _('delete') }}</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
+<header class="header">
+    <div class="header-inner">
+        <a href="/" class="logo">
+            <span class="logo-mark">L</span>
+            LinkSnap
+        </a>
+        <nav class="nav-links">
+            {% include '_lang_switcher.html' %}
+            <a href="/" class="btn btn-ghost btn-sm">{{ _('back_home') }}</a>
+            <a href="/logout" class="btn btn-ghost btn-sm" style="color: var(--error);">{{ _('logout') }}</a>
+        </nav>
     </div>
+</header>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        document.querySelectorAll('.local-time').forEach(el => {
-            let utcStr = el.getAttribute('data-utc');
-            if (utcStr) {
-                let utcDate = new Date(utcStr.replace(' ', 'T') + 'Z');
-                el.textContent = utcDate.toLocaleString();
-            }
-        });
-    </script>
+<div style="padding: var(--space-10) 0;">
+    <div class="container">
+
+        <div class="section-bar">
+            <h1>{{ _('admin_dashboard') }}</h1>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs" id="adminTabs">
+            <button class="tab-btn active" onclick="switchTab('stats')">{{ _('system_overview') }}</button>
+            <button class="tab-btn" onclick="switchTab('links')">{{ _('recent_urls') }}</button>
+            <button class="tab-btn" onclick="switchTab('users')">{{ _('user_management') }}</button>
+        </div>
+
+        <!-- System Overview -->
+        <div class="tab-content" id="tab-stats">
+            <div class="stats-grid">
+                <div class="stat-card stat-card-accent">
+                    <div class="stat-number accent">{{ total_urls }}</div>
+                    <div class="stat-label">{{ _('total_urls') }}</div>
+                </div>
+                <div class="stat-card stat-card-success">
+                    <div class="stat-number" style="color: var(--success);">{{ custom_urls }}</div>
+                    <div class="stat-label">{{ _('custom_urls') }}</div>
+                </div>
+                <div class="stat-card stat-card-warning">
+                    <div class="stat-number" style="color: var(--warning);">{{ total_clicks }}</div>
+                    <div class="stat-label">{{ _('total_clicks') }}</div>
+                </div>
+                <div class="stat-card stat-card-info">
+                    <div class="stat-number" style="color: var(--info); font-size: var(--text-xl);"><a href="/">{{ _('site_title') }}</a></div>
+                    <div class="stat-label">{{ _('back_home') }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent URLs -->
+        <div class="tab-content hidden" id="tab-links">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>{{ _('short_code_info') }}</th>
+                            <th>{{ _('original_url') }}</th>
+                            <th>{{ _('type_label') }}</th>
+                            <th>{{ _('created') }}</th>
+                            <th>{{ _('clicks') }}</th>
+                            <th>{{ _('expiry_label_info') }}</th>
+                            <th>{{ _('actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for url in recent_urls %}
+                        <tr>
+                            <td>{{ url[0] }}</td>
+                            <td><code>{{ url[1] }}</code></td>
+                            <td><a href="{{ url[2] }}" target="_blank" class="link-cell">{{ url[2][:50] }}{% if url[2]|length > 50 %}...{% endif %}</a></td>
+                            <td>{{ _('custom_type') if url[3] else _('system_generated_type') }}</td>
+                            <td class="local-time" data-utc="{{ url[4] }}">{{ url[4] }}</td>
+                            <td>{{ url[5] }}</td>
+                            <td>
+                                {% if url[6] %}
+                                <span class="local-time" data-utc="{{ url[6] }}">{{ url[6] }}</span>
+                                {% else %}
+                                <span class="badge badge-neutral">{{ _('permanent') }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="action-group">
+                                    <a href="/stats/{{ url[1] }}" class="btn btn-info btn-xs">{{ _('stats') }}</a>
+                                    <form action="/admin/link/{{ url[0] }}/delete" method="POST" style="display:inline;">
+                                        <button type="submit" class="btn btn-danger btn-xs" onclick="return confirm('{{ _('confirm_delete_link') }}')">{{ _('delete') }}</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Users -->
+        <div class="tab-content hidden" id="tab-users">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>{{ _('username') }}</th>
+                            <th>{{ _('email') }}</th>
+                            <th>{{ _('created') }}</th>
+                            <th>{{ _('actions') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user[0] }}</td>
+                            <td>{{ user[1] }}</td>
+                            <td>{{ user[2] }}</td>
+                            <td class="local-time" data-utc="{{ user[3] }}">{{ user[3] }}</td>
+                            <td>
+                                <form action="/admin/user/{{ user[0] }}/delete" method="POST" style="display:inline;">
+                                    <button type="submit" class="btn btn-danger btn-xs" onclick="return confirm('{{ _('confirm_delete_user') }}')">{{ _('delete') }}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// UTC to local
+document.querySelectorAll('.local-time').forEach(function(el) {
+    var utcStr = el.getAttribute('data-utc');
+    if (utcStr) {
+        var utcDate = new Date(utcStr.replace(' ', 'T') + 'Z');
+        el.textContent = utcDate.toLocaleString();
+    }
+});
+
+// Tab switching
+function switchTab(name) {
+    document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
+    document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    document.getElementById('tab-' + name).classList.remove('hidden');
+    event.target.classList.add('active');
+}
+
+// Hide all tab contents except first initially
+document.querySelectorAll('.tab-content:not(#tab-stats)').forEach(function(t) { t.classList.add('hidden'); });
+</script>
 </body>
 </html>

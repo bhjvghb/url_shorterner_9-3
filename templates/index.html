@@ -35,12 +35,12 @@
             <div class="affiliation">
                 <img src="{{ url_for('static', filename='hku-ece-logo.png') }}" alt="HKU ECE Logo">
                 <div class="affiliation-text">
-                    <span class="uni">A project of</span>
-                    <span class="dept">The University of Hong Kong &mdash; ECE</span>
+                    <span class="uni">{{ _('affiliation_prefix') }}</span>
+                    <span class="dept">{{ _('affiliation_dept') }}</span>
                 </div>
             </div>
-            <h1>Short links,<br>big impact.</h1>
-            <p>Create memorable, trackable short links in seconds. With custom codes, QR codes, and detailed analytics.</p>
+            <h1>{{ _('hero_heading')|safe }}</h1>
+            <p>{{ _('hero_subtext') }}</p>
         </div>
 
         <!-- Shorten Form -->
@@ -124,23 +124,23 @@
         <div class="feature-list">
             <div class="feature-item">
                 <span class="feature-icon">&#9889;</span>
-                <h4>Instant Shortening</h4>
-                <p>Paste a URL, get a short link in milliseconds. No waiting, no limits.</p>
+                <h4>{{ _('feature_instant_title') }}</h4>
+                <p>{{ _('feature_instant_desc') }}</p>
             </div>
             <div class="feature-item">
                 <span class="feature-icon">&#128273;</span>
-                <h4>Custom Codes</h4>
-                <p>Create branded, memorable short links with your own custom slugs.</p>
+                <h4>{{ _('feature_custom_title') }}</h4>
+                <p>{{ _('feature_custom_desc') }}</p>
             </div>
             <div class="feature-item">
                 <span class="feature-icon">&#128202;</span>
-                <h4>Click Analytics</h4>
-                <p>Track every click with geolocation, browser stats, and daily trend charts.</p>
+                <h4>{{ _('feature_analytics_title') }}</h4>
+                <p>{{ _('feature_analytics_desc') }}</p>
             </div>
             <div class="feature-item">
                 <span class="feature-icon">&#128274;</span>
-                <h4>Password Protection</h4>
-                <p>Add an extra layer of security with password-protected short links.</p>
+                <h4>{{ _('feature_protection_title') }}</h4>
+                <p>{{ _('feature_protection_desc') }}</p>
             </div>
         </div>
 

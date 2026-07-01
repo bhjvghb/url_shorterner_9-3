@@ -10,6 +10,18 @@
 
   "welcome": "Welcome",
   "shorten_subtitle": "Shorten your URLs instantly",
+  "hero_heading": "Short links,<br>big impact.",
+  "hero_subtext": "Create memorable, trackable short links in seconds. With custom codes, QR codes, and detailed analytics.",
+  "affiliation_prefix": "A project of",
+  "affiliation_dept": "The University of Hong Kong \u2014 ECE",
+  "feature_instant_title": "Instant Shortening",
+  "feature_instant_desc": "Paste a URL, get a short link in milliseconds. No waiting, no limits.",
+  "feature_custom_title": "Custom Codes",
+  "feature_custom_desc": "Create branded, memorable short links with your own custom slugs.",
+  "feature_analytics_title": "Click Analytics",
+  "feature_analytics_desc": "Track every click with geolocation, browser stats, and daily trend charts.",
+  "feature_protection_title": "Password Protection",
+  "feature_protection_desc": "Add an extra layer of security with password-protected short links.",
   "url_input_placeholder": "Enter your long URL here...",
   "custom_code_label": "Custom Short Code (optional)",
   "custom_code_placeholder": "e.g. my-link",
@@ -27,6 +39,7 @@
   "password_protect_placeholder": "Set a password to protect this link",
 
   "sign_in": "Sign In",
+  "sign_in_subtitle": "Sign in to manage your shortened links",
   "username_or_email": "Username or Email",
   "password": "Password",
   "forgot_password": "Forgot Password?",
@@ -34,6 +47,7 @@
   "register_now": "Register Now",
 
   "create_account": "Create Account",
+  "register_subtitle": "Start shortening links in seconds",
   "username": "Username",
   "email": "Email",
   "confirm_password": "Confirm Password",
@@ -132,6 +146,8 @@
 
   "success_title": "Shortened Successfully!",
   "success_heading": "Shortened Successfully!",
+  "success_subtitle": "Your short link is ready to share",
+  "success_with_custom_code": "with your custom code",
   "custom_short_code_badge": "Custom Short Code",
   "original_url_label": "Original URL",
   "short_url_label": "Short URL",

@@ -30,7 +30,7 @@
                 {% if is_custom %}<span class="badge badge-accent" style="margin-left: var(--space-2);">{{ _('custom_short_code_badge') }}</span>{% endif %}
             </h2>
             <p style="color: var(--text-secondary); margin-bottom: var(--space-8);">
-                Your short link is ready to share {% if is_custom %}<span style="color: var(--accent);">with your custom code</span>{% endif %}
+                {{ _('success_subtitle') }}{% if is_custom %} <span style="color: var(--accent);">{{ _('success_with_custom_code') }}</span>{% endif %}
             </p>
 
             <!-- Original URL -->

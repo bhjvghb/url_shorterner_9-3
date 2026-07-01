@@ -10,6 +10,18 @@
 
   "welcome": "歡迎",
   "shorten_subtitle": "即刻縮短你嘅連結",
+  "hero_heading": "短連結，<br>大影響。",
+  "hero_subtext": "幾秒內建立可追蹤嘅短連結。支援自訂短碼、二維碼同詳細數據分析。",
+  "affiliation_prefix": "項目歸屬",
+  "affiliation_dept": "香港大學 — 電子及計算機工程系",
+  "feature_instant_title": "即刻縮短",
+  "feature_instant_desc": "貼上連結，毫秒內生成短連結，唔使等，冇限制。",
+  "feature_custom_title": "自訂短碼",
+  "feature_custom_desc": "用你自己嘅專屬短碼，建立品牌化、易記嘅短連結。",
+  "feature_analytics_title": "點擊分析",
+  "feature_analytics_desc": "追蹤每一次點擊，睇到地理位置、瀏覽器統計同每日趨勢圖表。",
+  "feature_protection_title": "密碼保護",
+  "feature_protection_desc": "透過密碼保護短連結，為你嘅連結加多一層安全保障。",
   "url_input_placeholder": "喺呢度輸入長連結...",
   "custom_code_label": "自訂短碼（可選）",
   "custom_code_placeholder": "例如：my-link",
@@ -27,6 +39,7 @@
   "password_protect_placeholder": "設定訪問密碼以保護此連結",
 
   "sign_in": "登入",
+  "sign_in_subtitle": "登入以管理你嘅短連結",
   "username_or_email": "用戶名或電郵",
   "password": "密碼",
   "forgot_password": "唔記得密碼？",
@@ -34,6 +47,7 @@
   "register_now": "即刻註冊",
 
   "create_account": "建立賬號",
+  "register_subtitle": "幾秒鐘就可以開始建立短連結",
   "username": "用戶名",
   "email": "電郵",
   "confirm_password": "確認密碼",
@@ -132,6 +146,8 @@
 
   "success_title": "縮短成功！",
   "success_heading": "連結縮短成功！",
+  "success_subtitle": "你嘅短連結已經就緒，隨時可以分享",
+  "success_with_custom_code": "用咗自訂短碼",
   "custom_short_code_badge": "自訂短碼",
   "original_url_label": "原始連結",
   "short_url_label": "短連結",

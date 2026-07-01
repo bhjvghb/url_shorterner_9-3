@@ -10,6 +10,18 @@
 
   "welcome": "欢迎",
   "shorten_subtitle": "即刻缩短你的链接",
+  "hero_heading": "短链接，<br>大影响。",
+  "hero_subtext": "几秒内创建可追踪的短链接。支持自定义短码、二维码和详细数据分析。",
+  "affiliation_prefix": "项目归属",
+  "affiliation_dept": "香港大学 — 电子及计算机工程系",
+  "feature_instant_title": "即刻缩短",
+  "feature_instant_desc": "粘贴链接，毫秒级生成短链接，无等待、无限制。",
+  "feature_custom_title": "自定义短码",
+  "feature_custom_desc": "使用你自己的专属短码，创建品牌化、易记的短链接。",
+  "feature_analytics_title": "点击分析",
+  "feature_analytics_desc": "追踪每一次点击，查看地理位置、浏览器统计和每日趋势图表。",
+  "feature_protection_title": "密码保护",
+  "feature_protection_desc": "通过密码保护短链接，为你的链接增加一层安全保障。",
   "url_input_placeholder": "在此输入长链接...",
   "custom_code_label": "自定义短码（可选）",
   "custom_code_placeholder": "例如: my-link",
@@ -27,6 +39,7 @@
   "password_protect_placeholder": "设置访问密码以保护此链接",
 
   "sign_in": "登录",
+  "sign_in_subtitle": "登录以管理你的短链接",
   "username_or_email": "用户名或邮箱",
   "password": "密码",
   "forgot_password": "忘记密码？",
@@ -34,6 +47,7 @@
   "register_now": "立即注册",
 
   "create_account": "创建账号",
+  "register_subtitle": "几秒钟即可开始创建短链接",
   "username": "用户名",
   "email": "邮箱",
   "confirm_password": "确认密码",
@@ -132,6 +146,8 @@
 
   "success_title": "缩短成功！",
   "success_heading": "链接缩短成功！",
+  "success_subtitle": "你的短链接已就绪，随时可以分享",
+  "success_with_custom_code": "使用了自定义短码",
   "custom_short_code_badge": "自定义短码",
   "original_url_label": "原始链接",
   "short_url_label": "短链接",

@@ -10,7 +10,8 @@
 
   "welcome": "Welcome",
   "shorten_subtitle": "Shorten your URLs instantly",
-  "hero_heading": "Short links,<br>big impact.",
+  "hero_headline_1": "Short links,",
+  "hero_headline_2": "big impact.",
   "hero_subtext": "Create memorable, trackable short links in seconds. With custom codes, QR codes, and detailed analytics.",
   "affiliation_prefix": "A project of",
   "affiliation_dept": "The University of Hong Kong \u2014 ECE",

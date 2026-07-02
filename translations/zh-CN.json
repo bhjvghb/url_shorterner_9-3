@@ -10,7 +10,8 @@
 
   "welcome": "欢迎",
   "shorten_subtitle": "即刻缩短你的链接",
-  "hero_heading": "短链接，<br>大影响。",
+  "hero_headline_1": "短链接，",
+  "hero_headline_2": "大影响。",
   "hero_subtext": "几秒内创建可追踪的短链接。支持自定义短码、二维码和详细数据分析。",
   "affiliation_prefix": "项目归属",
   "affiliation_dept": "香港大学 — 电子及计算机工程系",

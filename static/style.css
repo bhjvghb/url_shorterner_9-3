@@ -682,8 +682,26 @@ tr:hover td { background: var(--surface-hover); }
   margin-bottom: var(--space-12);
 }
 .hero h1 {
-  font-size: var(--text-5xl);
-  margin-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.08em;
+  margin-bottom: var(--space-6);
+}
+.hero-line-1 {
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-normal);
+  letter-spacing: -0.02em;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+.hero-line-2 {
+  font-size: clamp(3.5rem, 8vw, 5.5rem);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.04em;
+  color: var(--accent);
+  line-height: 1;
+  margin-top: -0.05em;
 }
 .hero p {
   font-size: var(--text-lg);
@@ -949,4 +967,6 @@ tr:hover td { background: var(--surface-hover); }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .stats-layout { grid-template-columns: 1fr; }
   .stat-number { font-size: var(--text-2xl); }
+  .hero-line-1 { font-size: var(--text-xl); }
+  .hero-line-2 { font-size: clamp(2rem, 7vw, 3rem); }
 }

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="{{ g.locale }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ _('click_report') }}: {{ short_code }} - {{ _('site_title') }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        .report-container { max-width: 960px; margin: 0 auto; }
+        .report-header { background: var(--surface); border-radius: var(--radius-lg); padding: var(--space-6); margin-bottom: var(--space-5); border: 1px solid var(--border); }
+        .report-header h1 { font-size: var(--text-xl); margin: 0 0 var(--space-2) 0; }
+        .report-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-2); color: var(--text-secondary); font-size: var(--text-sm); }
+        .card-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin-bottom: var(--space-5); }
+        .metric-card { background: var(--surface); border-radius: var(--radius-lg); padding: var(--space-4); text-align: center; border: 1px solid var(--border); }
+        .metric-card .num { font-size: var(--text-2xl); font-weight: 700; }
+        .metric-card .lbl { font-size: var(--text-xs); color: var(--text-secondary); margin-top: var(--space-1); }
+        .metric-card.accent .num { color: var(--accent); }
+        .metric-card.success .num { color: var(--success); }
+        .metric-card.info .num { color: var(--info); }
+        .metric-card.warning .num { color: var(--warning); }
+        .chart-section { background: var(--surface); border-radius: var(--radius-lg); padding: var(--space-5); margin-bottom: var(--space-4); border: 1px solid var(--border); }
+        .chart-section h3 { font-size: var(--text-base); margin: 0 0 var(--space-4) 0; padding-bottom: var(--space-2); border-bottom: 2px solid var(--accent); }
+        .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-4); }
+        .chart-box { background: var(--surface); border-radius: var(--radius-lg); padding: var(--space-4); border: 1px solid var(--border); }
+        .chart-box h4 { font-size: var(--text-sm); margin: 0 0 var(--space-3) 0; color: var(--text-secondary); }
+        .chart-inner { position: relative; height: 260px; }
+        .chart-inner-tall { position: relative; height: 300px; }
+        .detail-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+        .detail-table th { background: var(--surface-secondary); padding: var(--space-2) var(--space-3); text-align: left; font-weight: 600; border-bottom: 2px solid var(--border); }
+        .detail-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); }
+        .detail-table tr:hover td { background: var(--surface-secondary); }
+        .action-bar { display: flex; gap: var(--space-3); margin-bottom: var(--space-5); }
+        .action-bar .btn { display: inline-flex; align-items: center; gap: var(--space-1); }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .no-print, .header { display: none; }
+            .report-container { max-width: 100%; }
+            .chart-section, .chart-box, .metric-card { border: 1px solid #dee2e6; box-shadow: none; break-inside: avoid; }
+            .action-bar { display: none; }
+            @page { margin: 15mm; }
+        }
+
+        @media (max-width: 768px) {
+            .card-row { grid-template-columns: repeat(2, 1fr); }
+            .charts-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="header no-print">
+    <div class="header-inner">
+        <a href="/" class="logo">
+            <span class="logo-mark">L</span>
+            LinkSnap
+        </a>
+        <nav class="nav-links">
+            {% include '_lang_switcher.html' %}
+            <a href="/dashboard" class="btn btn-ghost btn-sm">{{ _('back_dashboard') }}</a>
+            <a href="/" class="btn btn-secondary btn-sm">{{ _('back_home') }}</a>
+        </nav>
+    </div>
+</header>
+
+<div style="padding: var(--space-10) 0;">
+    <div class="container report-container">
+
+        <!-- Action Bar -->
+        <div class="action-bar no-print">
+            <button class="btn btn-primary btn-sm" onclick="downloadReport()">&#128190; {{ _('download_report') }}</button>
+            <button class="btn btn-secondary btn-sm" onclick="window.print()">&#128424; {{ _('print_report') }}</button>
+        </div>
+
+        <!-- Report Header -->
+        <div class="report-header">
+            <h1>{{ _('click_report') }}: <code>{{ short_code }}</code></h1>
+            <div class="report-meta">
+                <span><strong>{{ _('original_url_label') }}:</strong> <a href="{{ long_url }}" target="_blank" class="text-break">{{ long_url[:60] }}{% if long_url|length > 60 %}...{% endif %}</a></span>
+                <span><strong>{{ _('generated_at') }}:</strong> <span id="reportTime"></span></span>
+                {% if first_click_at and last_click_at %}
+                <span><strong>{{ _('period') }}:</strong> {{ first_click_at.strftime('%Y-%m-%d') }} ~ {{ last_click_at.strftime('%Y-%m-%d') }}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Metric Cards -->
+        <div class="card-row">
+            <div class="metric-card accent">
+                <div class="num">{{ total_clicks }}</div>
+                <div class="lbl">{{ _('total_clicks') }}</div>
+            </div>
+            <div class="metric-card success">
+                <div class="num">{{ today_clicks }}</div>
+                <div class="lbl">{{ _('today_clicks') }}</div>
+            </div>
+            <div class="metric-card info">
+                <div class="num">{{ unique_ips }}</div>
+                <div class="lbl">{{ _('unique_visitors') }}</div>
+            </div>
+            <div class="metric-card warning">
+                <div class="num" style="font-size: var(--text-lg);">
+                    {% if country_stats %}{{ country_stats[0].name }}{% else %}-{% endif %}
+                </div>
+                <div class="lbl">{{ _('top_country') }}</div>
+            </div>
+        </div>
+
+        {% if total_clicks > 0 %}
+        <!-- Daily Trend -->
+        <div class="chart-section">
+            <h3>{{ _('click_trend') }}</h3>
+            <div class="chart-inner-tall">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Source + Country -->
+        <div class="charts-row">
+            <div class="chart-box">
+                <h4>{{ _('source_analysis') }}</h4>
+                <div class="chart-inner">
+                    <canvas id="refererChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-box">
+                <h4>{{ _('top_country') }}</h4>
+                <div class="chart-inner">
+                    <canvas id="countryChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Browser + OS -->
+        <div class="charts-row">
+            <div class="chart-box">
+                <h4>{{ _('browser') }}</h4>
+                <div class="chart-inner">
+                    <canvas id="browserChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-box">
+                <h4>{{ _('operating_system') }}</h4>
+                <div class="chart-inner">
+                    <canvas id="osChart"></canvas>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Click Detail Table -->
+        {% if clicks %}
+        <div class="chart-section">
+            <h3>{{ _('link_statistics') }} ({{ clicks|length }})</h3>
+            <div style="max-height: 500px; overflow-y: auto;">
+                <table class="detail-table">
+                    <thead>
+                        <tr>
+                            <th>{{ _('accessed_at') }}</th>
+                            <th>{{ _('ip_address') }}</th>
+                            <th>{{ _('location') }}</th>
+                            <th>{{ _('referrer') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for click in clicks %}
+                        <tr>
+                            <td>{% if click.accessed_at %}{{ click.accessed_at.strftime('%Y-%m-%d %H:%M') }}{% else %}-{% endif %}</td>
+                            <td>{{ click.ip }}</td>
+                            <td>{% if click.country %}{{ click.country }}{% if click.city %}, {{ click.city }}{% endif %}{% else %}-{% endif %}</td>
+                            <td style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ click.referer if click.referer else _('direct_access') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="chart-section">
+            <p class="text-muted text-center" style="padding: var(--space-8) 0;">{{ _('no_clicks') }}</p>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+<script>
+    // Report timestamp
+    document.getElementById('reportTime').textContent = new Date().toLocaleString();
+
+    // Download
+    function downloadReport() {
+        var html = document.documentElement.outerHTML;
+        var blob = new Blob(['<!DOCTYPE html>\n' + html], {type: 'text/html'});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'LinkSnap_Report_{{ short_code }}.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // Charts (same as link_stats)
+    {% if total_clicks > 0 %}
+    var colors = ['#6366f1', '#8b5cf6', '#10b981', '#ef4444', '#3b82f6', '#f59e0b', '#06b6d4', '#ec4899', '#84cc16', '#f97316'];
+    var chartFont = "'Inter', system-ui, sans-serif";
+
+    new Chart(document.getElementById('trendChart'), {
+        type: 'line',
+        data: {
+            labels: {{ trend_data|map(attribute='date')|list|tojson }},
+            datasets: [{
+                label: '{{ _("daily_clicks") }}',
+                data: {{ trend_data|map(attribute='count')|list|tojson }},
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99,102,241,0.08)',
+                fill: true, tension: 0.3,
+                pointRadius: 2, pointBackgroundColor: '#6366f1'
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { family: chartFont, size: 10 } } },
+                y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 10 } } }
+            }
+        }
+    });
+
+    {% if referer_stats|length > 0 %}
+    new Chart(document.getElementById('refererChart'), {
+        type: 'doughnut',
+        data: {
+            labels: {{ referer_stats|map(attribute='domain')|list|tojson }},
+            datasets: [{ data: {{ referer_stats|map(attribute='count')|list|tojson }}, backgroundColor: colors, borderWidth: 0 }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'right', labels: { font: { family: chartFont, size: 10 }, padding: 10, usePointStyle: true } } }
+        }
+    });
+    {% endif %}
+
+    {% if country_stats|length > 0 %}
+    new Chart(document.getElementById('countryChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ country_stats|map(attribute='name')|list|tojson }},
+            datasets: [{ data: {{ country_stats|map(attribute='count')|list|tojson }}, backgroundColor: colors, borderWidth: 0, borderRadius: 4 }]
+        },
+        options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 10 } } }, y: { ticks: { font: { family: chartFont, size: 10 } } } }
+        }
+    });
+    {% endif %}
+
+    {% if browser_stats|length > 0 %}
+    new Chart(document.getElementById('browserChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ browser_stats|map(attribute='name')|list|tojson }},
+            datasets: [{ data: {{ browser_stats|map(attribute='count')|list|tojson }}, backgroundColor: colors, borderWidth: 0, borderRadius: 4 }]
+        },
+        options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 10 } } }, y: { ticks: { font: { family: chartFont, size: 10 } } } }
+        }
+    });
+    {% endif %}
+
+    {% if os_stats|length > 0 %}
+    new Chart(document.getElementById('osChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ os_stats|map(attribute='name')|list|tojson }},
+            datasets: [{ data: {{ os_stats|map(attribute='count')|list|tojson }}, backgroundColor: colors, borderWidth: 0, borderRadius: 4 }]
+        },
+        options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 10 } } }, y: { ticks: { font: { family: chartFont, size: 10 } } } }
+        }
+    });
+    {% endif %}
+    {% endif %}
+</script>
+</body>
+</html>

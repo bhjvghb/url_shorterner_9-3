@@ -116,6 +116,7 @@
                         <td>
                             <div class="action-group">
                                 <a href="/stats/{{ url.short_code }}" class="btn btn-info btn-xs">{{ _('stats') }}</a>
+                                <a href="/report/{{ url.short_code }}" class="btn btn-accent btn-xs">{{ _('generate_report') }}</a>
                                 {% if url.expires_at %}
                                 <form action="/extend/{{ url.short_code }}" method="POST" style="display:inline;">
                                     <button type="submit" class="btn btn-success btn-xs">{{ _('extend') }}</button>

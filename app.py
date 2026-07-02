@@ -1040,6 +1040,131 @@ def admin_delete_link(link_id):
     conn.close()
     return redirect(url_for('admin_dashboard'))
 
+# ------------------ 点击分析公共函数 ------------------
+def get_click_analytics(short_code, user_id, username=None):
+    """获取短链接的完整点击分析数据，供 stats 和 report 路由共用"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    # 查询短链接信息，验证权限
+    cur.execute("SELECT long_url, user_id FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT long_url, user_id FROM url_mappings WHERE short_code = ?", (short_code,))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return None
+
+    long_url, owner_id = row
+    if owner_id != user_id and username != 'admin':
+        cur.close()
+        conn.close()
+        return {'forbidden': True}
+
+    # 查询点击记录（含地理位置）
+    cur.execute("SELECT ip_address, user_agent, accessed_at, referer, country, region, city FROM clicks WHERE short_code = %s ORDER BY accessed_at DESC" if is_postgres else "SELECT ip_address, user_agent, accessed_at, referer, country, region, city FROM clicks WHERE short_code = ? ORDER BY accessed_at DESC", (short_code,))
+    clicks = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    # 转换为字典列表
+    clicks_list = []
+    unique_ips_set = set()
+    for c in clicks:
+        accessed = c[2]
+        if isinstance(accessed, str):
+            try:
+                accessed = datetime.strptime(accessed, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                try:
+                    accessed = datetime.fromisoformat(accessed)
+                except ValueError:
+                    accessed = None
+        ip = c[0]
+        if ip:
+            unique_ips_set.add(ip)
+        clicks_list.append({
+            'ip': ip,
+            'user_agent': c[1],
+            'accessed_at': accessed,
+            'referer': c[3],
+            'country': c[4] if len(c) > 4 else '',
+            'region': c[5] if len(c) > 5 else '',
+            'city': c[6] if len(c) > 6 else ''
+        })
+
+    total_clicks = len(clicks_list)
+    unique_ips = len(unique_ips_set)
+    now = datetime.now()
+
+    # 首次/最近点击时间
+    valid_times = [c['accessed_at'] for c in clicks_list if c['accessed_at']]
+    first_click_at = min(valid_times) if valid_times else None
+    last_click_at = max(valid_times) if valid_times else None
+
+    # 今日点击数
+    today_cutoff = now - timedelta(hours=24)
+    today_clicks = sum(1 for c in clicks_list if c['accessed_at'] and c['accessed_at'] >= today_cutoff)
+
+    # 日点击趋势
+    daily_trend = {}
+    for c in clicks_list:
+        if c['accessed_at']:
+            date_key = c['accessed_at'].strftime('%Y-%m-%d')
+            daily_trend[date_key] = daily_trend.get(date_key, 0) + 1
+    trend_data = []
+    for i in range(29, -1, -1):
+        d = (now - timedelta(days=i)).strftime('%Y-%m-%d')
+        trend_data.append({'date': d, 'count': daily_trend.get(d, 0)})
+
+    # 来源域名分布
+    referer_domains = {}
+    for c in clicks_list:
+        ref = c['referer']
+        if not ref:
+            domain = 'direct'
+        else:
+            try:
+                domain = ref.split('/')[2] if '://' in ref else ref.split('/')[0]
+            except Exception:
+                domain = 'other'
+        referer_domains[domain] = referer_domains.get(domain, 0) + 1
+    referer_stats = sorted(
+        [{'domain': k, 'count': v} for k, v in referer_domains.items()],
+        key=lambda x: x['count'], reverse=True
+    )[:10]
+
+    # 浏览器 / OS
+    browser_raw, os_raw = {}, {}
+    for c in clicks_list:
+        browser, os_name = parse_user_agent(c['user_agent'])
+        browser_raw[browser] = browser_raw.get(browser, 0) + 1
+        os_raw[os_name] = os_raw.get(os_name, 0) + 1
+    browser_stats = sorted([{'name': k, 'count': v} for k, v in browser_raw.items()], key=lambda x: x['count'], reverse=True)
+    os_stats = sorted([{'name': k, 'count': v} for k, v in os_raw.items()], key=lambda x: x['count'], reverse=True)
+
+    # 国家分布
+    country_raw = {}
+    for c in clicks_list:
+        cn = c['country'] if c['country'] else 'Unknown'
+        country_raw[cn] = country_raw.get(cn, 0) + 1
+    country_stats = sorted([{'name': k, 'count': v} for k, v in country_raw.items()], key=lambda x: x['count'], reverse=True)[:10]
+
+    return {
+        'long_url': long_url,
+        'clicks_list': clicks_list,
+        'total_clicks': total_clicks,
+        'unique_ips': unique_ips,
+        'first_click_at': first_click_at,
+        'last_click_at': last_click_at,
+        'today_clicks': today_clicks,
+        'trend_data': trend_data,
+        'referer_stats': referer_stats,
+        'browser_stats': browser_stats,
+        'os_stats': os_stats,
+        'country_stats': country_stats
+    }
+
 # ------------------ User-Agent 解析 ------------------
 def parse_user_agent(ua_string):
     """从 User-Agent 字符串中解析浏览器和操作系统名称"""
@@ -1080,6 +1205,55 @@ def parse_user_agent(ua_string):
         os_name = 'Linux'
 
     return browser, os_name
+
+# ------------------ 链接统计 ------------------
+@app.route('/stats/<short_code>')
+@login_required
+def link_stats(short_code):
+    user_id = session['user_id']
+    analytics = get_click_analytics(short_code, user_id, session.get('username'))
+    if not analytics:
+        return render_error_page(key='link_not_found', status_code=404)
+    if analytics.get('forbidden'):
+        return render_error_page(key='not_owner', status_code=403)
+
+    return render_template('link_stats.html',
+                         short_code=short_code,
+                         long_url=analytics['long_url'],
+                         clicks=analytics['clicks_list'],
+                         total_clicks=analytics['total_clicks'],
+                         today_clicks=analytics['today_clicks'],
+                         trend_data=analytics['trend_data'],
+                         referer_stats=analytics['referer_stats'],
+                         browser_stats=analytics['browser_stats'],
+                         os_stats=analytics['os_stats'],
+                         country_stats=analytics['country_stats'])
+
+# ------------------ 点击分析报告 ------------------
+@app.route('/report/<short_code>')
+@login_required
+def click_report(short_code):
+    user_id = session['user_id']
+    analytics = get_click_analytics(short_code, user_id, session.get('username'))
+    if not analytics:
+        return render_error_page(key='link_not_found', status_code=404)
+    if analytics.get('forbidden'):
+        return render_error_page(key='not_owner', status_code=403)
+
+    return render_template('report.html',
+                         short_code=short_code,
+                         long_url=analytics['long_url'],
+                         clicks=analytics['clicks_list'],
+                         total_clicks=analytics['total_clicks'],
+                         today_clicks=analytics['today_clicks'],
+                         unique_ips=analytics['unique_ips'],
+                         first_click_at=analytics['first_click_at'],
+                         last_click_at=analytics['last_click_at'],
+                         trend_data=analytics['trend_data'],
+                         referer_stats=analytics['referer_stats'],
+                         browser_stats=analytics['browser_stats'],
+                         os_stats=analytics['os_stats'],
+                         country_stats=analytics['country_stats'])
 
 # ------------------ 链接统计 ------------------
 @app.route('/stats/<short_code>')

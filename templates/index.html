@@ -186,10 +186,11 @@
         <div class="modal-content" style="border-radius: var(--radius-lg);">
             <div class="modal-header" style="background: var(--accent); color: white; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
                 <h5 class="modal-title">{{ _('batch_results') }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="batchResultBody" style="max-height: 480px; overflow-y: auto;"></div>
             <div class="modal-footer">
-                <button class="btn btn-secondary btn-sm" onclick="bootstrap.Modal.getInstance(document.getElementById('batchResultModal')).hide()">{{ _('close') }}</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">{{ _('close') }}</button>
             </div>
         </div>
     </div>
@@ -198,6 +199,14 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 var currentMode = 'single';
+var batchModal = null;
+
+function getBatchModal() {
+    if (!batchModal) {
+        batchModal = new bootstrap.Modal(document.getElementById('batchResultModal'));
+    }
+    return batchModal;
+}
 function switchMode(mode) {
     currentMode = mode;
     var singleBtn = document.getElementById('tabSingle');
@@ -275,7 +284,7 @@ function showBatchResults(data) {
     html += '<strong style="color:#dc2626;">' + fail + '</strong> {{ _('fail_count') }}';
     html += '</div>';
     document.getElementById('batchResultBody').innerHTML = html;
-    new bootstrap.Modal(document.getElementById('batchResultModal')).show();
+    getBatchModal().show();
 }
 
 function copyBatchUrl(url) {

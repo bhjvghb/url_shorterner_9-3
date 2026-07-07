@@ -27,6 +27,7 @@
   "single_mode": "单个",
   "batch_mode": "批量",
   "batch_placeholder": "粘贴多个链接，每行一个",
+  "batch_detect_btn": "识别链接",
   "batch_shorten_btn": "批量缩短",
   "batch_results": "批量结果",
   "batch_summary": "结果",

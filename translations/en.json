@@ -27,6 +27,7 @@
   "single_mode": "Single",
   "batch_mode": "Batch",
   "batch_placeholder": "Paste multiple URLs, one per line",
+  "batch_detect_btn": "Detect URLs",
   "batch_shorten_btn": "Shorten All",
   "batch_results": "Batch Results",
   "batch_summary": "Summary",

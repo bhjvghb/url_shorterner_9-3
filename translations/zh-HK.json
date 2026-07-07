@@ -27,6 +27,7 @@
   "single_mode": "單個",
   "batch_mode": "批量",
   "batch_placeholder": "貼上多個連結，每行一個",
+  "batch_detect_btn": "識別連結",
   "batch_shorten_btn": "批量縮短",
   "batch_results": "批量結果",
   "batch_summary": "結果",

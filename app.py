@@ -471,19 +471,17 @@ def shorten_url():
 @app.route('/batch_shorten', methods=['POST'])
 @login_required
 def batch_shorten():
-    raw_text = request.form.get('urls', '').strip()
-    expiry_choice = request.form.get('expiry', 'forever')
+    data = request.get_json(silent=True)
+    if not data or 'items' not in data:
+        return jsonify({'error': _('url_required')}), 400
+
+    items = data.get('items', [])
+    expiry_choice = data.get('expiry', 'forever')
     user_id = session.get('user_id')
 
-    if not raw_text:
+    if not items or not isinstance(items, list):
         return jsonify({'error': _('url_required')}), 400
 
-    # 解析 URL 列表（按行分割，过滤空行）
-    lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
-    if not lines:
-        return jsonify({'error': _('url_required')}), 400
-
-    # 过期时间
     expires_at = None
     if expiry_choice in EXPIRY_OPTIONS:
         delta = EXPIRY_OPTIONS[expiry_choice]
@@ -495,40 +493,61 @@ def batch_shorten():
     is_postgres = os.environ.get('DATABASE_URL') is not None
 
     results = []
-    for long_url in lines:
-        # URL 规范化
+    used_codes = set()  # 本次批量内已使用的短码
+
+    for item in items:
+        long_url = (item.get('url', '') or '').strip()
+        custom_code = (item.get('custom_code', '') or '').strip()
+        password = (item.get('password', '') or '').strip()
+
+        if not long_url:
+            results.append({'url': long_url, 'success': False, 'error': _('url_required')})
+            continue
+
         if not long_url.startswith(('http://', 'https://')):
             long_url = 'https://' + long_url
 
-        # 生成唯一短码
-        short_code = None
-        error = None
-        for _ in range(10):
-            code = generate_short_code(6)
-            cur.execute("SELECT * FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT * FROM url_mappings WHERE short_code = ?", (code,))
-            if not cur.fetchone() and code.lower() not in RESERVED_WORDS:
-                short_code = code
-                break
+        is_custom = False
+        if custom_code:
+            is_valid, error_key = validate_custom_code(custom_code)
+            if not is_valid:
+                results.append({'url': long_url, 'success': False, 'error': _(error_key)})
+                continue
+            cur.execute("SELECT * FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT * FROM url_mappings WHERE short_code = ?", (custom_code,))
+            if cur.fetchone() or custom_code in used_codes:
+                results.append({'url': long_url, 'success': False, 'error': _('code_in_use', code=custom_code)})
+                continue
+            short_code = custom_code
+            is_custom = True
+            used_codes.add(short_code)
+        else:
+            for _ in range(10):
+                code = generate_short_code(6)
+                cur.execute("SELECT * FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT * FROM url_mappings WHERE short_code = ?", (code,))
+                if not cur.fetchone() and code.lower() not in RESERVED_WORDS and code not in used_codes:
+                    short_code = code
+                    used_codes.add(short_code)
+                    break
+            else:
+                results.append({'url': long_url, 'success': False, 'error': _('gen_failed')})
+                continue
 
-        if not short_code:
-            results.append({'url': long_url, 'success': False, 'error': _('gen_failed')})
-            continue
+        pwd_hash = base64.b64encode(password.encode()).decode() if password else None
 
         try:
             if is_postgres:
                 cur.execute("""
-                    INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at)
-                    VALUES (%s, %s, FALSE, 0, %s, %s)
-                """, (long_url, short_code, user_id, expires_at))
+                    INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at, password_hash)
+                    VALUES (%s, %s, %s, 0, %s, %s, %s)
+                """, (long_url, short_code, is_custom, user_id, expires_at, pwd_hash))
             else:
                 cur.execute("""
-                    INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at)
-                    VALUES (?, ?, 0, 0, ?, ?)
-                """, (long_url, short_code, user_id, expires_at))
+                    INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at, password_hash)
+                    VALUES (?, ?, ?, 0, ?, ?, ?)
+                """, (long_url, short_code, 1 if is_custom else 0, user_id, expires_at, pwd_hash))
             conn.commit()
 
             short_url = f"{request.host_url}{short_code}"
-            # 生成二维码
             try:
                 qrcode_dir = os.path.join(app.static_folder, 'qrcodes')
                 os.makedirs(qrcode_dir, exist_ok=True)
@@ -541,7 +560,9 @@ def batch_shorten():
                 'url': long_url,
                 'success': True,
                 'short_code': short_code,
-                'short_url': short_url
+                'short_url': short_url,
+                'is_custom': is_custom,
+                'is_protected': bool(pwd_hash)
             })
         except Exception as e:
             conn.rollback()

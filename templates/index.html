@@ -122,22 +122,44 @@
             <div id="batchForm" style="display:none;">
                 <div class="form-group">
                     <label class="form-label" for="batchUrls">{{ _('batch_placeholder') }}</label>
-                    <textarea id="batchUrls" class="form-input" rows="6"
+                    <textarea id="batchUrls" class="form-input" rows="4"
                               style="resize: vertical; font-family: monospace; font-size: var(--text-sm);"
-                              placeholder="https://example.com/url-one&#10;https://example.com/url-two&#10;https://example.com/url-three"></textarea>
+                              placeholder="https://example.com/one&#10;https://example.com/two&#10;https://example.com/three"
+                              onblur="detectBatchUrls()"></textarea>
                 </div>
-                <div class="form-group">
-                    <label class="form-label" for="batchExpiry">{{ _('expiry_label') }}</label>
-                    <select class="form-select" id="batchExpiry">
-                        <option value="forever">{{ _('forever') }}</option>
-                        <option value="1d">{{ _('one_day') }}</option>
-                        <option value="7d">{{ _('seven_days') }}</option>
-                        <option value="30d">{{ _('thirty_days') }}</option>
-                    </select>
-                </div>
-                <button class="btn btn-primary btn-lg w-full mt-2" onclick="submitBatch()" id="batchBtn">
-                    {{ _('batch_shorten_btn') }}
+                <button type="button" class="btn btn-ghost btn-sm w-full mb-3" onclick="detectBatchUrls()">
+                    {{ _('batch_detect_btn') }}
                 </button>
+                <div id="batchTableSection" style="display:none;">
+                    <div style="overflow-x:auto; margin-bottom: var(--space-3);">
+                        <table style="width:100%; font-size:var(--text-xs); border-collapse:collapse;">
+                            <thead>
+                                <tr style="border-bottom:2px solid var(--border);">
+                                    <th style="padding:6px 4px; text-align:left;">#</th>
+                                    <th style="padding:6px 4px; text-align:left;">URL</th>
+                                    <th style="padding:6px 4px; text-align:left;">{{ _('custom_code_label') }}</th>
+                                    <th style="padding:6px 4px; text-align:left;">{{ _('password_protect_label') }}</th>
+                                    <th style="padding:6px 4px; width:40px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="batchTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="options-row">
+                        <div class="form-group">
+                            <label class="form-label" for="batchExpiry">{{ _('expiry_label') }}</label>
+                            <select class="form-select" id="batchExpiry">
+                                <option value="forever">{{ _('forever') }}</option>
+                                <option value="1d">{{ _('one_day') }}</option>
+                                <option value="7d">{{ _('seven_days') }}</option>
+                                <option value="30d">{{ _('thirty_days') }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-lg w-full mt-2" onclick="submitBatch()" id="batchBtn">
+                        {{ _('batch_shorten_btn') }}
+                    </button>
+                </div>
             </div>
 
             <!-- Stats -->
@@ -214,9 +236,45 @@ function toggleField(id) {
     el.classList.toggle('open');
 }
 
+function detectBatchUrls() {
+    var raw = document.getElementById('batchUrls').value;
+    var matches = raw.match(/https?:\/\/[^\s<>"'}\]]+/gi) || [];
+    var seen = {};
+    var urls = [];
+    matches.forEach(function(u) { if (!seen[u]) { seen[u] = true; urls.push(u); } });
+
+    var tbody = document.getElementById('batchTableBody');
+    tbody.innerHTML = '';
+    if (urls.length === 0) {
+        document.getElementById('batchTableSection').style.display = 'none';
+        return;
+    }
+    var html = '';
+    urls.forEach(function(url, i) {
+        html += '<tr>';
+        html += '<td style="padding:4px; color:var(--text-muted);">' + (i+1) + '</td>';
+        html += '<td style="padding:4px;"><input class="batch-url form-input" style="font-size:var(--text-xs); padding:4px 6px;" value="' + escapeAttr(url) + '" data-idx="' + i + '"></td>';
+        html += '<td style="padding:4px;"><input class="batch-code form-input" placeholder="optional" style="font-size:var(--text-xs); padding:4px 6px; width:90px;" data-idx="' + i + '"></td>';
+        html += '<td style="padding:4px;"><input type="password" class="batch-pwd form-input" placeholder="optional" style="font-size:var(--text-xs); padding:4px 6px; width:90px;" data-idx="' + i + '"></td>';
+        html += '<td style="padding:4px;"><button type="button" class="btn btn-ghost btn-xs" onclick="this.closest(\'tr\').remove()" style="color:#dc2626;">&times;</button></td>';
+        html += '</tr>';
+    });
+    tbody.innerHTML = html;
+    document.getElementById('batchTableSection').style.display = '';
+}
+
 function submitBatch() {
-    var urls = document.getElementById('batchUrls').value.trim();
-    if (!urls) return;
+    var rows = document.querySelectorAll('#batchTableBody tr');
+    if (rows.length === 0) return;
+    var items = [];
+    rows.forEach(function(row) {
+        var url = row.querySelector('.batch-url').value.trim();
+        var code = row.querySelector('.batch-code').value.trim();
+        var pwd = row.querySelector('.batch-pwd').value.trim();
+        if (url) items.push({url: url, custom_code: code, password: pwd});
+    });
+    if (items.length === 0) return;
+
     var expiry = document.getElementById('batchExpiry').value;
     var btn = document.getElementById('batchBtn');
     btn.textContent = 'Processing...';
@@ -224,8 +282,8 @@ function submitBatch() {
 
     fetch('/batch_shorten', {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'urls=' + encodeURIComponent(urls) + '&expiry=' + encodeURIComponent(expiry)
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({items: items, expiry: expiry})
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -249,8 +307,10 @@ function showBatchResults(data) {
             html += '<span style="font-size:1.2rem;">&#9989;</span>';
             html += '<div style="flex:1; min-width:0;">';
             html += '<div style="font-size:0.8rem; color:#78716c; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(r.url) + '</div>';
-            html += '<div style="font-weight:600;"><a href="' + r.short_url + '" target="_blank">' + r.short_url + '</a></div>';
-            html += '</div>';
+            html += '<div style="font-weight:600;"><a href="' + r.short_url + '" target="_blank">' + r.short_url + '</a>';
+            if (r.is_protected) html += ' <span style="background:#fef3c7;color:#92400e;font-size:0.7rem;padding:1px 6px;border-radius:8px;">&#128274;</span>';
+            if (r.is_custom) html += ' <span style="background:#e0e7ff;color:#3730a3;font-size:0.7rem;padding:1px 6px;border-radius:8px;">custom</span>';
+            html += '</div></div>';
             html += '<button class="btn btn-xs btn-ghost" onclick="copyBatchUrl(\'' + r.short_url + '\')">{{ _('copy') }}</button>';
             html += '</div>';
         } else {
@@ -275,14 +335,14 @@ function showBatchResults(data) {
 }
 
 function copyBatchUrl(url) {
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(url);
-    }
+    if (navigator.clipboard) { navigator.clipboard.writeText(url); }
 }
 
 function escapeHtml(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+function escapeAttr(s) { return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 </script>
 {% include '_pwa_script.html' %}
 </body>

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ _('admin_dashboard') }} - {{ _('site_title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% include '_pwa_head.html' %}
 </head>
 <body>
 
@@ -161,5 +162,6 @@ function switchTab(name) {
 // Hide all tab contents except first initially
 document.querySelectorAll('.tab-content:not(#tab-stats)').forEach(function(t) { t.classList.add('hidden'); });
 </script>
+{% include '_pwa_script.html' %}
 </body>
 </html>

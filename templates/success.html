@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ _('success_title') }} - {{ _('site_title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% include '_pwa_head.html' %}
 </head>
 <body>
 
@@ -112,5 +113,6 @@ function showToast(msg) {
     setTimeout(function() { t.classList.remove('show'); }, 1800);
 }
 </script>
+{% include '_pwa_script.html' %}
 </body>
 </html>

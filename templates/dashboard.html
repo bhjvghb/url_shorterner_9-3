@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ _('my_links') }} - {{ _('site_title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% include '_pwa_head.html' %}
 </head>
 <body>
 
@@ -332,5 +333,6 @@ document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
     });
 });
 </script>
+{% include '_pwa_script.html' %}
 </body>
 </html>

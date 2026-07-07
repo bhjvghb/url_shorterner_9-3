@@ -6,6 +6,7 @@
     <title>{{ _('click_report') }}: {{ short_code }} - {{ _('site_title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.3/html2pdf.bundle.min.js"></script>
     <style>
         .report-container { max-width: 960px; margin: 0 auto; }
         .report-header { background: var(--surface); border-radius: var(--radius-lg); padding: var(--space-6); margin-bottom: var(--space-5); border: 1px solid var(--border); }
@@ -47,6 +48,7 @@
             .charts-row { grid-template-columns: 1fr; }
         }
     </style>
+    {% include '_pwa_head.html' %}
 </head>
 <body>
 
@@ -69,7 +71,7 @@
 
         <!-- Action Bar -->
         <div class="action-bar no-print">
-            <button class="btn btn-primary btn-sm" onclick="downloadReport()">&#128190; {{ _('download_report') }}</button>
+            <button class="btn btn-primary btn-sm" onclick="downloadPDF()">&#128196; {{ _('download_pdf') }}</button>
             <button class="btn btn-secondary btn-sm" onclick="window.print()">&#128424; {{ _('print_report') }}</button>
         </div>
 
@@ -189,18 +191,22 @@
     // Report timestamp
     document.getElementById('reportTime').textContent = new Date().toLocaleString();
 
-    // Download
-    function downloadReport() {
-        var html = document.documentElement.outerHTML;
-        var blob = new Blob(['<!DOCTYPE html>\n' + html], {type: 'text/html'});
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = 'LinkSnap_Report_{{ short_code }}.html';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+    // PDF 导出（使用 html2pdf.js）
+    function downloadPDF() {
+        var btn = document.querySelector('.action-bar .btn-primary');
+        btn.textContent = 'Generating...';
+        btn.disabled = true;
+        var el = document.querySelector('.report-container');
+        html2pdf().set({
+            margin: [10, 10, 10, 10],
+            filename: 'LinkSnap_Report_{{ short_code }}.pdf',
+            image: { type: 'jpeg', quality: 0.95 },
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        }).from(el).save().then(function() {
+            btn.innerHTML = '&#128196; {{ _('download_pdf') }}';
+            btn.disabled = false;
+        });
     }
 
     // Charts (same as link_stats)
@@ -225,8 +231,8 @@
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-                x: { grid: { display: false }, ticks: { font: { family: chartFont, size: 10 } } },
-                y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 10 } } }
+                x: { grid: { display: false }, ticks: { font: { family: chartFont, size: 14 } } },
+                y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 14 } } }
             }
         }
     });
@@ -240,7 +246,7 @@
         },
         options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { position: 'right', labels: { font: { family: chartFont, size: 10 }, padding: 10, usePointStyle: true } } }
+            plugins: { legend: { position: 'right', labels: { font: { family: chartFont, size: 14 }, padding: 10, usePointStyle: true } } }
         }
     });
     {% endif %}
@@ -255,7 +261,7 @@
         options: {
             indexAxis: 'y', responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false } },
-            scales: { x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 10 } } }, y: { ticks: { font: { family: chartFont, size: 10 } } } }
+            scales: { x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 14 } } }, y: { ticks: { font: { family: chartFont, size: 14 } } } }
         }
     });
     {% endif %}
@@ -270,7 +276,7 @@
         options: {
             indexAxis: 'y', responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false } },
-            scales: { x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 10 } } }, y: { ticks: { font: { family: chartFont, size: 10 } } } }
+            scales: { x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 14 } } }, y: { ticks: { font: { family: chartFont, size: 14 } } } }
         }
     });
     {% endif %}
@@ -285,11 +291,12 @@
         options: {
             indexAxis: 'y', responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false } },
-            scales: { x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 10 } } }, y: { ticks: { font: { family: chartFont, size: 10 } } } }
+            scales: { x: { beginAtZero: true, ticks: { stepSize: 1, font: { family: chartFont, size: 14 } } }, y: { ticks: { font: { family: chartFont, size: 14 } } } }
         }
     });
     {% endif %}
     {% endif %}
 </script>
+{% include '_pwa_script.html' %}
 </body>
 </html>

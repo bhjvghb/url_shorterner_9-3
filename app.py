@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, abort
+from flask import Flask, render_template, request, redirect, url_for, session, abort, jsonify
 import os
 import re
 import string
@@ -466,6 +466,90 @@ def shorten_url():
         print(f"⚠️ QR code generation failed: {e}")
     
     return render_success_page(long_url, short_url, short_code, is_custom, expires_at)
+
+# ------------------ 批量缩短 ------------------
+@app.route('/batch_shorten', methods=['POST'])
+@login_required
+def batch_shorten():
+    raw_text = request.form.get('urls', '').strip()
+    expiry_choice = request.form.get('expiry', 'forever')
+    user_id = session.get('user_id')
+
+    if not raw_text:
+        return jsonify({'error': _('url_required')}), 400
+
+    # 解析 URL 列表（按行分割，过滤空行）
+    lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
+    if not lines:
+        return jsonify({'error': _('url_required')}), 400
+
+    # 过期时间
+    expires_at = None
+    if expiry_choice in EXPIRY_OPTIONS:
+        delta = EXPIRY_OPTIONS[expiry_choice]
+        if delta:
+            expires_at = datetime.now() + delta
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    results = []
+    for long_url in lines:
+        # URL 规范化
+        if not long_url.startswith(('http://', 'https://')):
+            long_url = 'https://' + long_url
+
+        # 生成唯一短码
+        short_code = None
+        error = None
+        for _ in range(10):
+            code = generate_short_code(6)
+            cur.execute("SELECT * FROM url_mappings WHERE short_code = %s" if is_postgres else "SELECT * FROM url_mappings WHERE short_code = ?", (code,))
+            if not cur.fetchone() and code.lower() not in RESERVED_WORDS:
+                short_code = code
+                break
+
+        if not short_code:
+            results.append({'url': long_url, 'success': False, 'error': _('gen_failed')})
+            continue
+
+        try:
+            if is_postgres:
+                cur.execute("""
+                    INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at)
+                    VALUES (%s, %s, FALSE, 0, %s, %s)
+                """, (long_url, short_code, user_id, expires_at))
+            else:
+                cur.execute("""
+                    INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at)
+                    VALUES (?, ?, 0, 0, ?, ?)
+                """, (long_url, short_code, user_id, expires_at))
+            conn.commit()
+
+            short_url = f"{request.host_url}{short_code}"
+            # 生成二维码
+            try:
+                qrcode_dir = os.path.join(app.static_folder, 'qrcodes')
+                os.makedirs(qrcode_dir, exist_ok=True)
+                img = qrcode.make(short_url)
+                img.save(os.path.join(qrcode_dir, f'{short_code}.png'))
+            except Exception:
+                pass
+
+            results.append({
+                'url': long_url,
+                'success': True,
+                'short_code': short_code,
+                'short_url': short_url
+            })
+        except Exception as e:
+            conn.rollback()
+            results.append({'url': long_url, 'success': False, 'error': str(e)[:100]})
+
+    cur.close()
+    conn.close()
+    return jsonify({'results': results, 'host_url': request.host_url})
 
 # ------------------ 重定向 ------------------
 @app.route('/<short_code>')

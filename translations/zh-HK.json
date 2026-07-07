@@ -23,6 +23,16 @@
   "feature_analytics_desc": "追蹤每一次點擊，睇到地理位置、瀏覽器統計同每日趨勢圖表。",
   "feature_protection_title": "密碼保護",
   "feature_protection_desc": "透過密碼保護短連結，為你嘅連結加多一層安全保障。",
+
+  "single_mode": "單個",
+  "batch_mode": "批量",
+  "batch_placeholder": "貼上多個連結，每行一個",
+  "batch_shorten_btn": "批量縮短",
+  "batch_results": "批量結果",
+  "batch_summary": "結果",
+  "success_count": "成功",
+  "fail_count": "失敗",
+
   "url_input_placeholder": "喺呢度輸入長連結...",
   "custom_code_label": "自訂短碼（可選）",
   "custom_code_placeholder": "例如：my-link",

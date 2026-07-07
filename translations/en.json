@@ -23,6 +23,16 @@
   "feature_analytics_desc": "Track every click with geolocation, browser stats, and daily trend charts.",
   "feature_protection_title": "Password Protection",
   "feature_protection_desc": "Add an extra layer of security with password-protected short links.",
+
+  "single_mode": "Single",
+  "batch_mode": "Batch",
+  "batch_placeholder": "Paste multiple URLs, one per line",
+  "batch_shorten_btn": "Shorten All",
+  "batch_results": "Batch Results",
+  "batch_summary": "Summary",
+  "success_count": "succeeded",
+  "fail_count": "failed",
+
   "url_input_placeholder": "Enter your long URL here...",
   "custom_code_label": "Custom Short Code (optional)",
   "custom_code_placeholder": "e.g. my-link",

@@ -52,11 +52,17 @@
         <div class="shorten-card">
             <div class="accent-bar"></div>
 
-            <form action="/shorten" method="POST" autocomplete="off">
+            <!-- 模式切换 -->
+            <div style="display: flex; gap: 0; margin-bottom: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden;">
+                <button type="button" id="tabSingle" class="btn btn-sm" style="flex:1; border-radius:0; border:none; background:var(--accent); color:white; font-weight:600;" onclick="switchMode('single')">{{ _('single_mode') }}</button>
+                <button type="button" id="tabBatch" class="btn btn-sm btn-ghost" style="flex:1; border-radius:0; border:none;" onclick="switchMode('batch')">{{ _('batch_mode') }}</button>
+            </div>
+
+            <!-- 单链接模式 -->
+            <form id="singleForm" action="/shorten" method="POST" autocomplete="off">
                 <div class="form-group">
                     <label class="form-label" for="long_url">{{ _('url_input_placeholder') }}</label>
                     <input type="url" class="form-input form-input-lg" id="long_url" name="long_url"
-                           placeholder="https://example.com/your-long-url-to-shorten"
                            autocomplete="off" required>
                 </div>
 
@@ -112,6 +118,28 @@
                 </button>
             </form>
 
+            <!-- 批量模式 -->
+            <div id="batchForm" style="display:none;">
+                <div class="form-group">
+                    <label class="form-label" for="batchUrls">{{ _('batch_placeholder') }}</label>
+                    <textarea id="batchUrls" class="form-input" rows="6"
+                              style="resize: vertical; font-family: monospace; font-size: var(--text-sm);"
+                              placeholder="https://example.com/url-one&#10;https://example.com/url-two&#10;https://example.com/url-three"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="batchExpiry">{{ _('expiry_label') }}</label>
+                    <select class="form-select" id="batchExpiry">
+                        <option value="forever">{{ _('forever') }}</option>
+                        <option value="1d">{{ _('one_day') }}</option>
+                        <option value="7d">{{ _('seven_days') }}</option>
+                        <option value="30d">{{ _('thirty_days') }}</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary btn-lg w-full mt-2" onclick="submitBatch()" id="batchBtn">
+                    {{ _('batch_shorten_btn') }}
+                </button>
+            </div>
+
             <!-- Stats -->
             <div class="stats-grid" style="margin-top: var(--space-6); margin-bottom: 0;">
                 <div class="stat-card">
@@ -152,10 +180,111 @@
     </div>
 </div>
 
+<!-- ===== 批量结果模态框 ===== -->
+<div class="modal fade" id="batchResultModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content" style="border-radius: var(--radius-lg);">
+            <div class="modal-header" style="background: var(--accent); color: white; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
+                <h5 class="modal-title">{{ _('batch_results') }}</h5>
+            </div>
+            <div class="modal-body" id="batchResultBody" style="max-height: 480px; overflow-y: auto;"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" onclick="bootstrap.Modal.getInstance(document.getElementById('batchResultModal')).hide()">{{ _('close') }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+var currentMode = 'single';
+function switchMode(mode) {
+    currentMode = mode;
+    var singleBtn = document.getElementById('tabSingle');
+    var batchBtn = document.getElementById('tabBatch');
+    if (mode === 'single') {
+        document.getElementById('singleForm').style.display = '';
+        document.getElementById('batchForm').style.display = 'none';
+        singleBtn.style.background = 'var(--accent)'; singleBtn.style.color = 'white'; singleBtn.style.fontWeight = '600';
+        batchBtn.style.background = ''; batchBtn.style.color = ''; batchBtn.style.fontWeight = '';
+    } else {
+        document.getElementById('singleForm').style.display = 'none';
+        document.getElementById('batchForm').style.display = '';
+        batchBtn.style.background = 'var(--accent)'; batchBtn.style.color = 'white'; batchBtn.style.fontWeight = '600';
+        singleBtn.style.background = ''; singleBtn.style.color = ''; singleBtn.style.fontWeight = '';
+    }
+}
+
 function toggleField(id) {
     var el = document.getElementById(id);
     el.classList.toggle('open');
+}
+
+function submitBatch() {
+    var urls = document.getElementById('batchUrls').value.trim();
+    if (!urls) return;
+    var expiry = document.getElementById('batchExpiry').value;
+    var btn = document.getElementById('batchBtn');
+    btn.textContent = 'Processing...';
+    btn.disabled = true;
+
+    fetch('/batch_shorten', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'urls=' + encodeURIComponent(urls) + '&expiry=' + encodeURIComponent(expiry)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.textContent = '{{ _('batch_shorten_btn') }}';
+        btn.disabled = false;
+        showBatchResults(data);
+    })
+    .catch(function() {
+        btn.textContent = '{{ _('batch_shorten_btn') }}';
+        btn.disabled = false;
+    });
+}
+
+function showBatchResults(data) {
+    var ok = 0, fail = 0;
+    var html = '<div style="display:grid; gap:8px;">';
+    data.results.forEach(function(r) {
+        if (r.success) {
+            ok++;
+            html += '<div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 14px; display:flex; align-items:center; gap:10px;">';
+            html += '<span style="font-size:1.2rem;">&#9989;</span>';
+            html += '<div style="flex:1; min-width:0;">';
+            html += '<div style="font-size:0.8rem; color:#78716c; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(r.url) + '</div>';
+            html += '<div style="font-weight:600;"><a href="' + r.short_url + '" target="_blank">' + r.short_url + '</a></div>';
+            html += '</div>';
+            html += '<button class="btn btn-xs btn-ghost" onclick="copyBatchUrl(\'' + r.short_url + '\')">{{ _('copy') }}</button>';
+            html += '</div>';
+        } else {
+            fail++;
+            html += '<div style="background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:10px 14px; display:flex; align-items:center; gap:10px;">';
+            html += '<span style="font-size:1.2rem;">&#10060;</span>';
+            html += '<div style="flex:1; min-width:0;">';
+            html += '<div style="font-size:0.8rem; color:#78716c; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(r.url) + '</div>';
+            html += '<div style="color:#dc2626; font-size:0.85rem;">' + (r.error || 'Failed') + '</div>';
+            html += '</div></div>';
+        }
+    });
+    html += '</div>';
+    html += '<div style="margin-top:12px; text-align:center; font-size:0.85rem; color:var(--text-secondary);">';
+    html += '{{ _('batch_summary') }}: <strong style="color:var(--accent);">' + ok + '</strong> {{ _('success_count') }}, ';
+    html += '<strong style="color:#dc2626;">' + fail + '</strong> {{ _('fail_count') }}';
+    html += '</div>';
+    document.getElementById('batchResultBody').innerHTML = html;
+    new bootstrap.Modal(document.getElementById('batchResultModal')).show();
+}
+
+function copyBatchUrl(url) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(url);
+    }
+}
+
+function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>
 {% include '_pwa_script.html' %}

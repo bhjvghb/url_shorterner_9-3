@@ -23,6 +23,16 @@
   "feature_analytics_desc": "追踪每一次点击，查看地理位置、浏览器统计和每日趋势图表。",
   "feature_protection_title": "密码保护",
   "feature_protection_desc": "通过密码保护短链接，为你的链接增加一层安全保障。",
+
+  "single_mode": "单个",
+  "batch_mode": "批量",
+  "batch_placeholder": "粘贴多个链接，每行一个",
+  "batch_shorten_btn": "批量缩短",
+  "batch_results": "批量结果",
+  "batch_summary": "结果",
+  "success_count": "成功",
+  "fail_count": "失败",
+
   "url_input_placeholder": "在此输入长链接...",
   "custom_code_label": "自定义短码（可选）",
   "custom_code_placeholder": "例如: my-link",

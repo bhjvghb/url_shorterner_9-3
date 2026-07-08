@@ -17,6 +17,7 @@
         </a>
         <nav class="nav-links">
             {% include '_lang_switcher.html' %}
+                {% include '_theme_toggle.html' %}
             <a href="/" class="btn btn-ghost btn-sm">{{ _('home') }}</a>
             <a href="/logout" class="btn btn-ghost btn-sm" style="color: var(--error);">{{ _('logout') }}</a>
         </nav>
@@ -269,12 +270,6 @@ function copyUrl(url) {
 }
 
 // Toast
-function showToast(msg) {
-    var t = document.getElementById('toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; document.body.appendChild(t); }
-    t.textContent = msg; t.classList.add('show');
-    setTimeout(function() { t.classList.remove('show'); }, 1800);
-}
-
 // Filter
 function applyFilter() {
     var s = document.getElementById('searchInput').value.trim();
@@ -334,5 +329,6 @@ document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
 });
 </script>
 {% include '_pwa_script.html' %}
+{% include '_toast.html' %}
 </body>
 </html>

@@ -17,6 +17,7 @@
         </a>
         <nav class="nav-links">
             {% include '_lang_switcher.html' %}
+                {% include '_theme_toggle.html' %}
             {% if session.username %}
                 <a href="/dashboard" class="btn btn-ghost btn-sm">{{ _('dashboard_btn') }}</a>
                 <a href="/logout" class="btn btn-ghost btn-sm">{{ _('logout') }}</a>
@@ -345,5 +346,6 @@ function escapeHtml(s) {
 function escapeAttr(s) { return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 </script>
 {% include '_pwa_script.html' %}
+{% include '_toast.html' %}
 </body>
 </html>

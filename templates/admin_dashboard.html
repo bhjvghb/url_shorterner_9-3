@@ -17,6 +17,7 @@
         </a>
         <nav class="nav-links">
             {% include '_lang_switcher.html' %}
+                {% include '_theme_toggle.html' %}
             <a href="/" class="btn btn-ghost btn-sm">{{ _('back_home') }}</a>
             <a href="/logout" class="btn btn-ghost btn-sm" style="color: var(--error);">{{ _('logout') }}</a>
         </nav>
@@ -163,5 +164,6 @@ function switchTab(name, el) {
 document.querySelectorAll('.tab-content:not(#tab-stats)').forEach(function(t) { t.classList.add('hidden'); });
 </script>
 {% include '_pwa_script.html' %}
+{% include '_toast.html' %}
 </body>
 </html>

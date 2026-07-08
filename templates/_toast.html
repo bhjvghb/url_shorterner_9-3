@@ -1,0 +1,14 @@
+<!-- Toast 通知组件 -->
+<style>
+  #globalToast { position:fixed; top:24px; right:24px; z-index:9999; background:var(--surface-card); color:var(--text-primary); padding:12px 24px; border-radius:var(--radius-md); box-shadow:0 4px 20px rgba(0,0,0,0.15); font-size:var(--text-sm); opacity:0; transform:translateY(-10px); transition:opacity 0.25s,transform 0.25s; pointer-events:none; border:1px solid var(--border); }
+  #globalToast.show { opacity:1; transform:translateY(0); }
+</style>
+<script>
+(function(){
+  var t = document.createElement('div'); t.id = 'globalToast'; document.body.appendChild(t);
+  window.showToast = function(msg) {
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(t._tid); t._tid = setTimeout(function(){ t.classList.remove('show'); }, 2000);
+  };
+})();
+</script>

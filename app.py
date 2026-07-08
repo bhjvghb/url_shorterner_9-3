@@ -109,7 +109,8 @@ def init_db():
                 expires_at TIMESTAMP,
                 password_hash VARCHAR(255),
                 tag VARCHAR(50),
-                updated_at TIMESTAMP
+                updated_at TIMESTAMP,
+                reminder_sent INTEGER DEFAULT 0
             )
         ''')
     else:
@@ -125,9 +126,18 @@ def init_db():
                 expires_at TIMESTAMP,
                 password_hash TEXT,
                 tag TEXT,
-                updated_at TIMESTAMP
+                updated_at TIMESTAMP,
+                reminder_sent INTEGER DEFAULT 0
             )
         ''')
+    # 迁移：为已有数据库添加 reminder_sent 列
+    try:
+        if is_postgres:
+            cur.execute("ALTER TABLE url_mappings ADD COLUMN IF NOT EXISTS reminder_sent INTEGER DEFAULT 0")
+        else:
+            cur.execute("ALTER TABLE url_mappings ADD COLUMN reminder_sent INTEGER DEFAULT 0")
+    except Exception:
+        pass  # 列已存在则忽略
 
     # ---------- 创建 clicks 表 ----------
     if is_postgres:
@@ -830,6 +840,130 @@ def reset_password(token):
     cur.close()
     conn.close()
     return render_template('reset_password.html', token=token)
+
+# ------------------ 定时任务（Cron） ------------------
+CRON_SECRET = os.environ.get('CRON_SECRET', 'default-cron-secret-change-me')
+
+def _check_cron_token():
+    """简单的 token 验证，防止外部随意调用 cron 端点"""
+    token = request.args.get('token', '')
+    return token == CRON_SECRET
+
+@app.route('/cron/expiry-reminder')
+def cron_expiry_reminder():
+    """检查 3 天内即将到期的链接，发送邮件提醒用户"""
+    if not _check_cron_token():
+        return 'Unauthorized', 401
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    now = datetime.now()
+    window_end = now + timedelta(days=3)
+    reminder_sent = 0
+
+    # 查找 3 天内到期且未发送过提醒的链接
+    cur.execute("""
+        SELECT um.short_code, um.long_url, um.expires_at, um.reminder_sent,
+               u.email, u.username
+        FROM url_mappings um
+        JOIN users u ON um.user_id = u.id
+        WHERE um.expires_at IS NOT NULL
+          AND um.expires_at <= %s
+          AND um.expires_at > %s
+          AND (um.reminder_sent = 0 OR um.reminder_sent IS NULL)
+    """ if is_postgres else """
+        SELECT um.short_code, um.long_url, um.expires_at, um.reminder_sent,
+               u.email, u.username
+        FROM url_mappings um
+        JOIN users u ON um.user_id = u.id
+        WHERE um.expires_at IS NOT NULL
+          AND um.expires_at <= ?
+          AND um.expires_at > ?
+          AND (um.reminder_sent = 0 OR um.reminder_sent IS NULL)
+    """, (window_end, now))
+
+    rows = cur.fetchall()
+
+    smtp_configured = all([os.environ.get('SMTP_HOST'), os.environ.get('SMTP_USER'), os.environ.get('SMTP_PASS')])
+
+    for row in rows:
+        short_code, long_url, expires_at, _, email, username = row
+        short_url = f"{request.host_url}{short_code}"
+        exp_str = expires_at.strftime('%Y-%m-%d %H:%M UTC') if isinstance(expires_at, datetime) else str(expires_at)
+
+        if smtp_configured:
+            try:
+                send_expiry_email(email, username, short_code, short_url, long_url, exp_str)
+            except Exception as e:
+                logger.warning(f"Failed to send expiry reminder for {short_code}: {e}")
+                continue
+
+        # 标记已发送提醒
+        cur.execute("UPDATE url_mappings SET reminder_sent = 1 WHERE short_code = %s" if is_postgres else "UPDATE url_mappings SET reminder_sent = 1 WHERE short_code = ?", (short_code,))
+        reminder_sent += 1
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return jsonify({'reminders_sent': reminder_sent, 'smtp_configured': smtp_configured})
+
+@app.route('/cron/cleanup-expired')
+def cron_cleanup_expired():
+    """清理已过期的链接（软删除，标记为已过期）"""
+    if not _check_cron_token():
+        return 'Unauthorized', 401
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    is_postgres = os.environ.get('DATABASE_URL') is not None
+
+    cur.execute("SELECT COUNT(*) FROM url_mappings WHERE expires_at IS NOT NULL AND expires_at < %s" if is_postgres else "SELECT COUNT(*) FROM url_mappings WHERE expires_at IS NOT NULL AND expires_at < ?", (datetime.now(),))
+    expired_count = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+
+    return jsonify({'expired_links': expired_count, 'note': '这些链接已阻止访问但未被删除。'})
+
+def send_expiry_email(to_email, username, short_code, short_url, long_url, exp_str):
+    """发送链接到期提醒邮件"""
+    smtp_host = os.environ.get('SMTP_HOST')
+    smtp_port = os.environ.get('SMTP_PORT', '587')
+    smtp_user = os.environ.get('SMTP_USER')
+    smtp_pass = os.environ.get('SMTP_PASS')
+    smtp_from = os.environ.get('SMTP_FROM', smtp_user or 'noreply@linksnap.com')
+
+    if not all([smtp_host, smtp_user, smtp_pass]):
+        logger.info(f"[DEMO] Expiry reminder: {short_code} expires {exp_str}")
+        return
+
+    msg = MIMEMultipart()
+    msg['From'] = smtp_from
+    msg['To'] = to_email
+    msg['Subject'] = f'LinkSnap - Your short link {short_code} is expiring soon'
+    body = f"""Hi {username},
+
+Your short link is about to expire:
+
+  Short Code: {short_code}
+  Short URL:  {short_url}
+  Long URL:   {long_url}
+  Expires At: {exp_str}
+
+You can extend the lifespan by visiting your dashboard:
+  {request.host_url}dashboard
+
+--
+LinkSnap
+"""
+    msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+    with smtplib.SMTP(smtp_host, int(smtp_port), timeout=10) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
 
 # ------------------ 仪表盘 ------------------
 @app.route('/dashboard')

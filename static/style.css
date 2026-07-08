@@ -995,3 +995,45 @@ tr:hover td { background: var(--surface-hover); }
     line-height: 1;
   }
 }
+/* ============================================
+   Dark Mode
+   ============================================ */
+[data-theme="dark"] {
+  --surface: #1e1e2e;
+  --surface-card: #252536;
+  --surface-muted: #2a2a3c;
+  --surface-secondary: #303046;
+  --background: #16162a;
+  --text-primary: #e4e4ec;
+  --text-secondary: #a0a0b8;
+  --text-muted: #6c6c80;
+  --border: #3a3a50;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+  --shadow-lg: 0 8px 30px rgba(0,0,0,0.6);
+  color-scheme: dark;
+}
+[data-theme="dark"] body { background: var(--background); }
+[data-theme="dark"] .header { background: var(--surface-card); border-bottom-color: var(--border); }
+[data-theme="dark"] .shorten-card { background: var(--surface-card); }
+[data-theme="dark"] .stat-card { background: var(--surface-muted); }
+[data-theme="dark"] .feature-item { background: var(--surface-card); }
+[data-theme="dark"] .table-wrapper { background: var(--surface-card); }
+[data-theme="dark"] table th { background: var(--surface-muted); }
+[data-theme="dark"] table td { border-bottom-color: var(--border); }
+[data-theme="dark"] .chart-section, [data-theme="dark"] .chart-box { background: var(--surface-card); }
+[data-theme="dark"] .modal-content { background: var(--surface-card); }
+[data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea {
+  background: var(--surface-secondary); color: var(--text-primary); border-color: var(--border);
+}
+[data-theme="dark"] input::placeholder, [data-theme="dark"] textarea::placeholder { color: var(--text-muted); }
+[data-theme="dark"] .btn-ghost { color: var(--text-secondary); }
+[data-theme="dark"] .btn-ghost:hover { background: var(--surface-muted); color: var(--text-primary); }
+/* Theme toggle button */
+.theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius-full);
+  width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 1.1rem; color: var(--text-secondary); transition: all var(--duration-fast);
+}
+.theme-toggle:hover { background: var(--surface-muted); color: var(--text-primary); }
+

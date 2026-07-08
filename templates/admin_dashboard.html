@@ -32,9 +32,9 @@
 
         <!-- Tabs -->
         <div class="tabs" id="adminTabs">
-            <button class="tab-btn active" onclick="switchTab('stats')">{{ _('system_overview') }}</button>
-            <button class="tab-btn" onclick="switchTab('links')">{{ _('recent_urls') }}</button>
-            <button class="tab-btn" onclick="switchTab('users')">{{ _('user_management') }}</button>
+            <button class="tab-btn active" onclick="switchTab('stats', this)">{{ _('system_overview') }}</button>
+            <button class="tab-btn" onclick="switchTab('links', this)">{{ _('recent_urls') }}</button>
+            <button class="tab-btn" onclick="switchTab('users', this)">{{ _('user_management') }}</button>
         </div>
 
         <!-- System Overview -->
@@ -152,11 +152,11 @@ document.querySelectorAll('.local-time').forEach(function(el) {
 });
 
 // Tab switching
-function switchTab(name) {
+function switchTab(name, el) {
     document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
     document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
     document.getElementById('tab-' + name).classList.remove('hidden');
-    event.target.classList.add('active');
+    if (el) el.classList.add('active');
 }
 
 // Hide all tab contents except first initially

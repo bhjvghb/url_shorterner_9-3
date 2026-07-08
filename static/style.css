@@ -540,6 +540,7 @@ tr:hover td { background: var(--surface-hover); }
   animation: fadeIn var(--duration-fast) var(--ease-out);
 }
 .modal-overlay.hidden { display: none; }
+.hidden { display: none !important; }
 .modal {
   background: var(--surface-card);
   border-radius: var(--radius-xl);

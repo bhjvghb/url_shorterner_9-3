@@ -260,6 +260,11 @@ a:hover { color: var(--accent-hover); }
   color: white;
 }
 .btn-info:hover { background: #5a7d8f; color: white; }
+.btn-accent {
+  background: var(--accent);
+  color: white;
+}
+.btn-accent:hover { background: var(--accent-hover); color: white; }
 .btn-warning {
   background: var(--warning);
   color: white;

@@ -13,7 +13,6 @@ from datetime import datetime, timedelta
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 import qrcode
-from PIL import Image
 import requests
 
 # 数据库适配优先使用 PostgreSQL（通过环境变量 DATABASE_URL），否则回退到 SQLite
@@ -682,10 +681,10 @@ def verify_password_page(short_code):
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username'].strip()
-        email = request.form['email'].strip()
-        password = request.form['password']
-        confirm = request.form['confirm_password']
+        username = (request.form.get('username', '') or '').strip()
+        email = (request.form.get('email', '') or '').strip()
+        password = (request.form.get('password', '') or '')
+        confirm = (request.form.get('confirm_password', '') or '')
 
         if not username or not email or not password:
             return render_error_page(key='all_fields_required')
@@ -728,8 +727,8 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username_or_email = request.form['username'].strip()
-        password = request.form['password']
+        username_or_email = (request.form.get('username', '') or '').strip()
+        password = (request.form.get('password', '') or '')
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -758,7 +757,7 @@ def logout():
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
-        email = request.form['email'].strip()
+        email = (request.form.get('email', '') or '').strip()
         conn = get_db_connection()
         cur = conn.cursor()
         is_postgres = os.environ.get('DATABASE_URL') is not None
@@ -810,11 +809,15 @@ def reset_password(token):
         return render_error_page(key='token_invalid', status_code=400)
 
     if request.method == 'POST':
-        new_password = request.form['password']
-        confirm = request.form['confirm_password']
+        new_password = request.form.get('password', '')
+        confirm = request.form.get('confirm_password', '')
         if new_password != confirm:
+            cur.close()
+            conn.close()
             return render_error_page(key='passwords_not_match')
         if len(new_password) < 6:
+            cur.close()
+            conn.close()
             return render_error_page(key='password_too_short')
         if is_postgres:
             cur.execute("UPDATE users SET password_hash = %s, reset_token = NULL, reset_token_expiry = NULL WHERE id = %s", (hash_password(new_password), user[0]))

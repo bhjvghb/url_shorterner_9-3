@@ -851,7 +851,7 @@ def _check_cron_token():
 
 @app.route('/cron/expiry-reminder')
 def cron_expiry_reminder():
-    """检查 3 天内即将到期的链接，发送邮件提醒用户"""
+    """检查 30 分钟内即将到期的链接，发送邮件提醒用户"""
     if not _check_cron_token():
         return 'Unauthorized', 401
 
@@ -860,10 +860,10 @@ def cron_expiry_reminder():
     is_postgres = os.environ.get('DATABASE_URL') is not None
 
     now = datetime.now()
-    window_end = now + timedelta(days=3)
+    window_end = now + timedelta(minutes=30)
     reminder_sent = 0
 
-    # 查找 3 天内到期且未发送过提醒的链接
+    # 查找 30 分钟内到期且未发送过提醒的链接
     cur.execute("""
         SELECT um.short_code, um.long_url, um.expires_at, um.reminder_sent,
                u.email, u.username

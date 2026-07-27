@@ -188,6 +188,10 @@ def init_db():
             return column in columns
 
     # 为 url_mappings 添加可能缺失的列
+    if not column_exists('url_mappings', 'created_at'):
+        cur.execute("ALTER TABLE url_mappings ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        print("✅ Add a created_at column to url_mappings")
+
     if not column_exists('url_mappings', 'is_custom'):
         if is_postgres:
             cur.execute("ALTER TABLE url_mappings ADD COLUMN is_custom BOOLEAN DEFAULT FALSE")
@@ -388,6 +392,7 @@ def shorten_url():
     custom_code = request.form.get('custom_code', '').strip()
     expiry_choice = request.form.get('expiry', 'forever')
     password = request.form.get('password', '').strip()  # 可选密码保护
+    tag = request.form.get('tag', '').strip()  # 可选标签
 
     if not long_url:
         return render_error_page(key='url_required')
@@ -442,14 +447,14 @@ def shorten_url():
     try:
         if is_postgres:
             cur.execute("""
-                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at, password_hash)
-                VALUES (%s, %s, %s, 0, %s, %s, %s)
-            """, (long_url, short_code, is_custom, user_id, expires_at, pwd_hash))
+                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at, password_hash, tag)
+                VALUES (%s, %s, %s, 0, %s, %s, %s, %s)
+            """, (long_url, short_code, is_custom, user_id, expires_at, pwd_hash, tag or None))
         else:
             cur.execute("""
-                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at, password_hash)
-                VALUES (?, ?, ?, 0, ?, ?, ?)
-            """, (long_url, short_code, 1 if is_custom else 0, user_id, expires_at, pwd_hash))
+                INSERT INTO url_mappings (long_url, short_code, is_custom, click_count, user_id, expires_at, password_hash, tag)
+                VALUES (?, ?, ?, 0, ?, ?, ?, ?)
+            """, (long_url, short_code, 1 if is_custom else 0, user_id, expires_at, pwd_hash, tag or None))
         conn.commit()
     except Exception as e:
         cur.close()

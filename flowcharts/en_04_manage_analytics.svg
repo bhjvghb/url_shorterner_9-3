@@ -1,0 +1,54 @@
+<svg viewBox="0 0 680 540" width="100%" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>Manage and Analyze Links</title>
+  <desc>Login → Dashboard → manage links → analytics → report</desc>
+  <defs>
+    <marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <text x="340" y="26" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#534AB7" font-size="16">Manage and Analyze Your Links</text>
+  <rect x="40" y="46" width="600" height="70" rx="12" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="340" y="70" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#3C3489" font-size="14">Sign Up / Log In</text>
+  <rect x="60" y="82" width="180" height="24" rx="6" fill="#CECBF6" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="150" y="98" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#3C3489" font-size="12">Email + Password</text>
+  <line x1="240" y1="94" x2="264" y2="94" stroke="#534AB7" stroke-width="1" marker-end="url(#a3)"/>
+  <rect x="268" y="82" width="160" height="24" rx="6" fill="#CECBF6" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="348" y="98" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#3C3489" font-size="12">Forgot? Email Reset</text>
+  <line x1="426" y1="94" x2="460" y2="94" stroke="#534AB7" stroke-width="1" marker-end="url(#a3)"/>
+  <rect x="466" y="82" width="160" height="24" rx="6" fill="#CECBF6" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="546" y="98" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#3C3489" font-size="12">Log Out</text>
+  <line x1="340" y1="116" x2="340" y2="140" stroke="#534AB7" stroke-width="1.5" marker-end="url(#a3)"/>
+  <rect x="40" y="144" width="600" height="130" rx="12" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="340" y="168" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#0C447C" font-size="14">Dashboard — All Your Short Links</text>
+  <rect x="58" y="180" width="130" height="40" rx="8" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="123" y="198" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#0C447C" font-size="12">Create New</text>
+  <text x="123" y="214" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#185FA5">Back to home page</text>
+  <rect x="198" y="180" width="130" height="40" rx="8" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="263" y="198" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#0C447C" font-size="12">Search</text>
+  <text x="263" y="214" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#185FA5">By alias or tag</text>
+  <rect x="338" y="180" width="130" height="40" rx="8" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="403" y="198" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#0C447C" font-size="12">Edit</text>
+  <text x="403" y="214" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#185FA5">Update target URL</text>
+  <rect x="478" y="180" width="148" height="40" rx="8" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="552" y="198" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#0C447C" font-size="12">More Actions</text>
+  <text x="552" y="214" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#185FA5">Delete · Extend · Tag</text>
+  <rect x="58" y="228" width="568" height="24" rx="6" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="342" y="244" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#0C447C">Paginated list · copy link · QR preview · expiry status · owner-only access</text>
+  <line x1="340" y1="274" x2="340" y2="298" stroke="#185FA5" stroke-width="1.5" marker-end="url(#a3)"/>
+  <rect x="40" y="302" width="600" height="140" rx="12" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="340" y="326" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#085041" font-size="14">Analytics — Per-Link Insights</text>
+  <rect x="58" y="338" width="270" height="26" rx="8" fill="#9FE1CB" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="193" y="355" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#085041" font-size="12">Daily Click Trend (Interactive Chart)</text>
+  <rect x="352" y="338" width="270" height="26" rx="8" fill="#9FE1CB" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="487" y="355" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#085041" font-size="12">Referrer Breakdown</text>
+  <rect x="58" y="372" width="270" height="26" rx="8" fill="#9FE1CB" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="193" y="389" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#085041" font-size="12">Browser · OS Distribution</text>
+  <rect x="352" y="372" width="270" height="26" rx="8" fill="#9FE1CB" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="487" y="389" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#085041" font-size="12">Geo Distribution (Country Map)</text>
+  <rect x="58" y="410" width="564" height="24" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="340" y="426" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#085041">Charts powered by Chart.js · All data auto-collected on each click</text>
+  <line x1="340" y1="442" x2="340" y2="464" stroke="#0F6E56" stroke-width="1.5" marker-end="url(#a3)"/>
+  <rect x="40" y="468" width="600" height="44" rx="12" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
+  <text x="340" y="488" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#27500A" font-size="14">Full Report</text>
+  <text x="340" y="504" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#3B6D11">Total clicks · unique visitors · first/last access · province · browser share · source breakdown</text>
+</svg>

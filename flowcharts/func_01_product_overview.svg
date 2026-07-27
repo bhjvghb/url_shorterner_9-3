@@ -1,0 +1,74 @@
+<svg viewBox="0 0 680 520" width="100%" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>LinkSnap Product Features Overview</title>
+  <desc>LinkSnap: URL shortening, smart redirection, analytics dashboard, secure management — all in one platform</desc>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <text x="340" y="28" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#3C3489" font-size="16">LinkSnap — 智能短链接平台功能概览</text>
+
+  <rect x="220" y="50" width="240" height="40" rx="10" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="340" y="74" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#3C3489" font-size="14">长链接 ➜ 短链接</text>
+
+  <line x1="340" y1="90" x2="340" y2="112" stroke="#534AB7" stroke-width="1" marker-end="url(#arr)"/>
+
+  <rect x="40" y="116" width="280" height="140" rx="12" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="180" y="142" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#085041" font-size="14">链接生成</text>
+  <rect x="58" y="156" width="96" height="36" rx="8" fill="#9FE1CB" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="106" y="178" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#085041" font-size="12">自动缩短</text>
+  <rect x="162" y="156" width="96" height="36" rx="8" fill="#9FE1CB" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="210" y="178" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#085041" font-size="12">自定义短码</text>
+  <rect x="58" y="200" width="96" height="36" rx="8" fill="#9FE1CB" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="106" y="222" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#085041" font-size="12">批量缩短</text>
+  <rect x="162" y="200" width="96" height="36" rx="8" fill="#9FE1CB" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="210" y="222" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#085041" font-size="12">二维码生成</text>
+
+  <rect x="360" y="116" width="280" height="140" rx="12" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="500" y="142" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#0C447C" font-size="14">智能跳转</text>
+  <rect x="378" y="156" width="120" height="36" rx="8" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="438" y="178" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#0C447C" font-size="12">一键重定向</text>
+  <rect x="506" y="156" width="120" height="36" rx="8" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="566" y="178" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#0C447C" font-size="12">密码保护</text>
+  <rect x="378" y="200" width="120" height="36" rx="8" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="438" y="222" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#0C447C" font-size="12">有效期控制</text>
+  <rect x="506" y="200" width="120" height="36" rx="8" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="566" y="222" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#0C447C" font-size="12">访问统计</text>
+
+  <line x1="340" y1="256" x2="340" y2="280" stroke="#888780" stroke-width="1" marker-end="url(#arr)"/>
+
+  <rect x="40" y="284" width="280" height="116" rx="12" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
+  <text x="180" y="310" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#27500A" font-size="14">数据分析</text>
+  <rect x="58" y="324" width="120" height="36" rx="8" fill="#C0DD97" stroke="#3B6D11" stroke-width="0.5"/>
+  <text x="118" y="346" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#27500A" font-size="12">点击趋势图</text>
+  <rect x="186" y="324" width="120" height="36" rx="8" fill="#C0DD97" stroke="#3B6D11" stroke-width="0.5"/>
+  <text x="246" y="346" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#27500A" font-size="12">地理位置分布</text>
+  <rect x="58" y="368" width="120" height="20" rx="6" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
+  <text x="118" y="382" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#3B6D11">浏览器 / 操作系统</text>
+  <rect x="186" y="368" width="120" height="20" rx="6" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
+  <text x="246" y="382" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#3B6D11">来源渠道分析</text>
+
+  <rect x="360" y="284" width="280" height="116" rx="12" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+  <text x="500" y="310" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#712B13" font-size="14">链接管理</text>
+  <rect x="378" y="324" width="120" height="36" rx="8" fill="#F5C4B3" stroke="#993C1D" stroke-width="0.5"/>
+  <text x="438" y="346" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#712B13" font-size="12">编辑 / 删除</text>
+  <rect x="506" y="324" width="120" height="36" rx="8" fill="#F5C4B3" stroke="#993C1D" stroke-width="0.5"/>
+  <text x="566" y="346" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#712B13" font-size="12">续期 / 标签</text>
+  <rect x="378" y="368" width="120" height="20" rx="6" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+  <text x="438" y="382" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#993C1D">到期前提醒</text>
+  <rect x="506" y="368" width="120" height="20" rx="6" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+  <text x="566" y="382" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#993C1D">导出详细报告</text>
+
+  <line x1="340" y1="400" x2="340" y2="422" stroke="#888780" stroke-width="1" marker-end="url(#arr)"/>
+
+  <rect x="40" y="426" width="600" height="46" rx="12" fill="#FBEAF0" stroke="#993556" stroke-width="0.5"/>
+  <text x="100" y="452" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#72243E" font-size="13">多语言支持</text>
+  <text x="100" y="464" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#993556">简体 / English / 粤语</text>
+  <text x="280" y="452" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#72243E" font-size="13">响应式设计</text>
+  <text x="280" y="464" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#993556">手机 / 平板 / 电脑</text>
+  <text x="470" y="452" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#72243E" font-size="13">PWA 支持</text>
+  <text x="470" y="464" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#993556">可安装到桌面</text>
+  <text x="610" y="452" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="500" fill="#72243E" font-size="13">深色模式</text>
+  <text x="610" y="464" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#993556">自动适配主题</text>
+</svg>
